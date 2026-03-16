@@ -1,120 +1,87 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+/**
+ * CONTEXT:
+ * Minimal hello-world surface for the DCX admin frontend.
+ * This now proves the local React + TanStack + shadcn stack boots cleanly while consuming
+ * the shared branding package for the common button primitive, shared backend welcome banner,
+ * and logo asset.
+ *
+ * CONTRACT:
+ * preconditions: The Vite React app has booted, is wrapped in a QueryClientProvider, and the local branding package dependency is installed.
+ * postconditions: Renders a stable admin hello-world screen with a shared branding logo, a shared branding button, a shared backend welcome banner, and one TanStack-backed status line.
+ * side_effects: None.
+ * idempotent: Yes.
+ * retry_safe: Yes.
+ * blocking_behavior: Non-blocking render after the in-memory query resolves and the shared banner performs its own backend fetch.
+ *
+ * NARRATIVE:
+ * WHY this exists: To verify the MVP admin frontend can consume shared branding assets and shared UI primitives while also connecting to the backend shell.
+ * WHEN TO USE it: During initial setup and smoke testing of the admin workspace.
+ * WHEN NOT TO USE it: Once real admin flows replace the bootstrap screen.
+ * WHAT CAN GO WRONG: Missing provider wiring, broken branding package dependency, broken asset import, or backend unavailability can stop parts of the screen from rendering correctly.
+ * WHAT COMES NEXT: Replace this screen with the first real admin flow while continuing to consume shared branding elements.
+ *
+ * TESTS:
+ * - renders the DCX Admin heading
+ * - renders the shared logo asset without import errors
+ * - renders the shared branding button without import errors
+ * - renders the shared backend welcome banner without import errors
+ * - renders the TanStack query status as ready
+ *
+ * ERRORS:
+ * - ADMIN_HELLO_WORLD_PROVIDER_MISSING: TanStack hooks used outside the provider.
+ *   suggested_action: Wrap the app tree in QueryClientProvider.
+ *   common_causes: Provider removed from main.tsx.
+ *   recovery_steps: Restore QueryClientProvider around <App />.
+ *   retry_safe: Yes.
+ * - ADMIN_HELLO_WORLD_BRANDING_DEPENDENCY_MISSING: Shared branding imports cannot resolve.
+ *   suggested_action: Reinstall dependencies and confirm @dcx/branding is present.
+ *   common_causes: Local file dependency not installed or stale node_modules state.
+ *   recovery_steps: Run npm install again in dcx_admin after any branding package change.
+ *   retry_safe: Yes.
+ *
+ * CODE:
+ */
+import { useQuery } from "@tanstack/react-query"
+import { Button, SharedBackendWelcomeMessageBanner } from "@dcx/branding"
+import dcxLogo from "@dcx/branding/assets/dcx_logo.png"
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { data } = useQuery({
+    queryKey: ["dcx_admin_bootstrap_status"],
+    queryFn: async () => ({ status: "ready" as const }),
+  })
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+    <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-950">
+      <section className="mx-auto flex max-w-3xl flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-10 shadow-sm">
+        <div className="flex items-center gap-4">
+          <img src={dcxLogo} alt="DCX logo" className="h-12 w-12 rounded-xl object-contain" />
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">
+            DCX Admin
           </p>
         </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div className="space-y-3">
+          <h1 className="text-4xl font-semibold tracking-tight">
+            Admin frontend hello world
+          </h1>
+          <p className="max-w-2xl text-base leading-7 text-slate-600">
+            React, TanStack Query, and shadcn are installed and rendering inside the
+            admin workspace. The shared branding package now supplies the button,
+            logo, and backend welcome banner.
+          </p>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+
+        <SharedBackendWelcomeMessageBanner apiBaseUrl="http://127.0.0.1:8000" />
+
+        <div className="flex flex-wrap items-center gap-4">
+          <Button>shared branding button works</Button>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            TanStack status: {data?.status ?? "loading"}
+          </span>
         </div>
       </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
