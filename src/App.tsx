@@ -46,6 +46,8 @@ import { Button, SharedBackendWelcomeMessageBanner } from "@prompteoai/dcx-brand
 import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
 
 function App() {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
+
   const { data } = useQuery({
     queryKey: ["dcx_admin_bootstrap_status"],
     queryFn: async () => ({ status: "ready" as const }),
@@ -72,7 +74,7 @@ function App() {
           </p>
         </div>
 
-        <SharedBackendWelcomeMessageBanner apiBaseUrl="http://127.0.0.1:8000" />
+        <SharedBackendWelcomeMessageBanner apiBaseUrl={apiBaseUrl} />
 
         <div className="flex flex-wrap items-center gap-4">
           <Button>shared branding button works</Button>
