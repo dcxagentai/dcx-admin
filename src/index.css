@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
-@import "@dcx/branding/theme.css";
+@import "@prompteoai/dcx-branding/theme.css";
 
 body {
   margin: 0;
@@ -15,3 +15,4 @@ body {
 #root {
   min-height: 100vh;
 }
+

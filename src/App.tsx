@@ -34,7 +34,7 @@
  *   recovery_steps: Restore QueryClientProvider around <App />.
  *   retry_safe: Yes.
  * - ADMIN_HELLO_WORLD_BRANDING_DEPENDENCY_MISSING: Shared branding imports cannot resolve.
- *   suggested_action: Reinstall dependencies and confirm @dcx/branding is present.
+ *   suggested_action: Reinstall dependencies and confirm @prompteoai/dcx-branding is present.
  *   common_causes: Local file dependency not installed or stale node_modules state.
  *   recovery_steps: Run npm install again in dcx_admin after any branding package change.
  *   retry_safe: Yes.
@@ -42,8 +42,8 @@
  * CODE:
  */
 import { useQuery } from "@tanstack/react-query"
-import { Button, SharedBackendWelcomeMessageBanner } from "@dcx/branding"
-import dcxLogo from "@dcx/branding/assets/dcx_logo.png"
+import { Button, SharedBackendWelcomeMessageBanner } from "@prompteoai/dcx-branding"
+import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
 
 function App() {
   const { data } = useQuery({
@@ -86,3 +86,4 @@ function App() {
 }
 
 export default App
+
