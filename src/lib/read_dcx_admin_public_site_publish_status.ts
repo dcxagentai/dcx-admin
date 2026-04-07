@@ -5,8 +5,7 @@
  * for a Cloudflare Pages rebuild now that the public Astro site reads from dcx_api at build time.
  *
  * CONTRACT:
- * preconditions: The dcx_admin frontend knows the backend base URL and may temporarily provide
- * a local debug admin user id through the browser query string.
+ * preconditions: The dcx_admin frontend knows the backend base URL and carries one authenticated admin/dev session cookie.
  * postconditions: Returns the canonical backend public-site publish-status payload on success.
  * side_effects: None.
  * idempotent: Yes.
@@ -18,19 +17,17 @@
  * rather than embedding fetch details in the page.
  * WHEN TO USE it: Use it from TanStack Query in the admin publish screen only.
  * WHEN NOT TO USE it: Do not use it for triggering the deploy; the matching run helper owns that.
- * WHAT CAN GO WRONG: The backend can reject the temporary debug admin identity path, the
- * publish-state SQL may not be applied yet, or the network can fail.
- * WHAT COMES NEXT: Keep this read path stable while the identity source changes from local
- * `?admin_user_id=` testing to real admin session-backed auth.
+ * WHAT CAN GO WRONG: The backend can reject the current session, the publish-state SQL may not be applied yet, or the network can fail.
+ * WHAT COMES NEXT: Keep this read path stable while more admin publishing controls are added.
  *
  * TESTS:
  * No frontend test harness exists in dcx_admin yet.
  *
  * ERRORS:
  * - DCX_ADMIN_PUBLIC_SITE_PUBLISH_STATUS_READ_FAILED: The backend returned a non-success wrapper or the fetch failed.
- *   suggested_action: Confirm the API is reachable, the publish-state SQL exists, and add a valid local `?admin_user_id=` while admin auth is not wired yet.
- *   common_causes: Missing debug admin user id, publish-state table missing, backend unavailable.
- *   recovery_steps: Apply the SQL if needed, retry with a valid admin user id locally, then retry after backend health is restored.
+ *   suggested_action: Confirm the API is reachable, the publish-state SQL exists, and the browser still has a valid admin/dev session.
+ *   common_causes: Missing or expired session, publish-state table missing, backend unavailable.
+ *   recovery_steps: Sign in again if needed, apply the SQL if needed, then retry after backend health is restored.
  *   retry_safe: Yes.
  *
  * CODE:
@@ -82,16 +79,12 @@ type DcxAdminPublicSitePublishStatusErrorResponse = {
 
 export async function readDcxAdminPublicSitePublishStatus(params: {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }): Promise<DcxAdminPublicSitePublishStatusSuccessResponse> {
   const statusUrl = new URL("/admin/publish/public-site/status", params.apiBaseUrl)
 
-  if (typeof params.debugAdminUserId === "number" && Number.isFinite(params.debugAdminUserId)) {
-    statusUrl.searchParams.set("admin_user_id", String(params.debugAdminUserId))
-  }
-
   const response = await fetch(statusUrl.toString(), {
     method: "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },

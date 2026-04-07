@@ -5,8 +5,7 @@
  * embedding Cloudflare-trigger request details in the page.
  *
  * CONTRACT:
- * preconditions: The admin frontend knows the backend base URL and may temporarily provide a
- * local debug admin user id through the browser query string.
+ * preconditions: The admin frontend knows the backend base URL and carries one authenticated admin/dev session cookie.
  * postconditions: Returns the canonical backend publish-trigger wrapper on success.
  * side_effects: Requests one Cloudflare Pages deploy through the backend route.
  * idempotent: No.
@@ -18,19 +17,17 @@
  * mixing trigger request details into the page component.
  * WHEN TO USE it: Use it from the `Publish public site` button only.
  * WHEN NOT TO USE it: Do not use it for passive publish-status reads.
- * WHAT CAN GO WRONG: The backend can reject the local debug admin identity path, the deploy hook
- * can be missing, or the network can fail.
- * WHAT COMES NEXT: Keep this trigger stable while real admin auth replaces the temporary local
- * `?admin_user_id=` testing path.
+ * WHAT CAN GO WRONG: The backend can reject the current session, the deploy hook can be missing, or the network can fail.
+ * WHAT COMES NEXT: Keep this trigger stable while more admin publishing controls are added.
  *
  * TESTS:
  * No frontend test harness exists in dcx_admin yet.
  *
  * ERRORS:
  * - DCX_ADMIN_PUBLIC_SITE_PUBLISH_TRIGGER_FAILED: The backend returned a non-success wrapper or the fetch failed.
- *   suggested_action: Confirm the API is reachable, the deploy hook is configured, and the local debug admin id is valid.
- *   common_causes: Missing debug admin user id, missing deploy hook env var, backend unavailable.
- *   recovery_steps: Fix the backend configuration or auth state, then retry.
+ *   suggested_action: Confirm the API is reachable, the deploy hook is configured, and the current admin/dev session is still valid.
+ *   common_causes: Missing or expired session, missing deploy hook env var, backend unavailable.
+ *   recovery_steps: Sign in again if needed, fix the backend configuration if needed, then retry.
  *   retry_safe: Yes.
  *
  * CODE:
@@ -63,16 +60,12 @@ type DcxAdminPublicSitePublishRunErrorResponse = {
 
 export async function triggerDcxAdminPublicSitePublishRun(params: {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }): Promise<DcxAdminPublicSitePublishRunSuccessResponse> {
   const runUrl = new URL("/admin/publish/public-site/run", params.apiBaseUrl)
 
-  if (typeof params.debugAdminUserId === "number" && Number.isFinite(params.debugAdminUserId)) {
-    runUrl.searchParams.set("admin_user_id", String(params.debugAdminUserId))
-  }
-
   const response = await fetch(runUrl.toString(), {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },

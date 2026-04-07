@@ -15,7 +15,6 @@ import { saveDcxAdminLiveUxStringRow } from "../lib/save_dcx_admin_live_ux_strin
 
 type Props = {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }
 
 type EditableFieldVisualState = "idle" | "editing" | "saving" | "saved" | "error"
@@ -191,18 +190,16 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
   const queryClient = useQueryClient()
   const resetVisualStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const catalogQuery = useQuery({
-    queryKey: ["dcx_admin_live_ux_strings_catalog", props.debugAdminUserId],
+    queryKey: ["dcx_admin_live_ux_strings_catalog"],
     queryFn: async () =>
       readDcxAdminLiveUxStringsCatalog({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
   })
   const saveUxStringMutation = useMutation({
     mutationFn: async (params: { uxStringId: number; text: string }) =>
       saveDcxAdminLiveUxStringRow({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
         uxStringId: params.uxStringId,
         text: params.text,
       }),
@@ -304,7 +301,7 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
         })
 
         await queryClient.invalidateQueries({
-          queryKey: ["dcx_admin_live_ux_strings_catalog", props.debugAdminUserId],
+          queryKey: ["dcx_admin_live_ux_strings_catalog"],
         })
 
         setSelectedLanguageVisualState("saved")
@@ -378,7 +375,7 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
             </p>
             <p className="text-sm text-slate-500">
               {(catalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
-                "Use ?admin_user_id=<existing_user_id> locally until admin auth is connected."}
+                "Sign in with a valid admin or dev session, then retry."}
             </p>
           </div>
         ) : null}

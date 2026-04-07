@@ -15,7 +15,6 @@ import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
 
 type Props = {
   apiBaseUrl: string
-  debugAdminUserId: number | null
   initialEmailType?: string | null
   onEmailTypeRouteChange?: (nextEmailType: string | null) => void
 }
@@ -261,11 +260,10 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
   const queryClient = useQueryClient()
   const resetVisualStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const catalogQuery = useQuery({
-    queryKey: ["dcx_admin_live_emails_catalog", props.debugAdminUserId],
+    queryKey: ["dcx_admin_live_emails_catalog"],
     queryFn: async () =>
       readDcxAdminLiveEmailsCatalog({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
   })
   const saveEmailMutation = useMutation({
@@ -276,7 +274,6 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
     }) =>
       saveDcxAdminLiveEmailRow({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
         emailId: params.emailId,
         emailSubject: params.emailSubject,
         emailBody: params.emailBody,
@@ -396,7 +393,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         })
 
         await queryClient.invalidateQueries({
-          queryKey: ["dcx_admin_live_emails_catalog", props.debugAdminUserId],
+          queryKey: ["dcx_admin_live_emails_catalog"],
         })
 
         setSelectedLanguageVisualState("saved")
@@ -470,7 +467,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
             </p>
             <p className="text-sm text-slate-500">
               {(catalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
-                "Use ?admin_user_id=<existing_user_id> locally until admin auth is connected."}
+                "Sign in with a valid admin or dev session, then retry."}
             </p>
           </div>
         ) : null}

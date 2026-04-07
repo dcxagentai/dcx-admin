@@ -5,8 +5,7 @@
  * the pending-change baseline without touching Cloudflare.
  *
  * CONTRACT:
- * preconditions: The admin frontend knows the backend base URL and may temporarily provide a
- * local debug admin user id through the browser query string.
+ * preconditions: The admin frontend knows the backend base URL and carries one authenticated admin/dev session cookie.
  * postconditions: Returns the canonical backend local-rebuild-complete wrapper on success.
  * side_effects: Records one local rebuild completion through the backend route.
  * idempotent: No.
@@ -18,8 +17,7 @@
  * manually rebuilds dcx_public.
  * WHEN TO USE it: Use it only after manually running `npm run dev` or `npm run build` in dcx_public.
  * WHEN NOT TO USE it: Do not use it in hosted environments.
- * WHAT CAN GO WRONG: The backend can reject the local debug admin identity path, the route can be
- * forbidden outside local/development, or the network can fail.
+ * WHAT CAN GO WRONG: The backend can reject the current session, the route can be forbidden outside local/development, or the network can fail.
  * WHAT COMES NEXT: Keep this helper stable while the local publish simulation stays in place.
  *
  * TESTS:
@@ -27,9 +25,9 @@
  *
  * ERRORS:
  * - DCX_ADMIN_PUBLIC_SITE_LOCAL_REBUILD_COMPLETE_FAILED: The backend returned a non-success wrapper or the fetch failed.
- *   suggested_action: Confirm the API is reachable, the route is being used locally, and the debug admin id is valid.
- *   common_causes: Missing debug admin user id, route called outside local mode, backend unavailable.
- *   recovery_steps: Retry in local development with a valid admin id after backend health is restored.
+ *   suggested_action: Confirm the API is reachable, the route is being used locally, and the current admin/dev session is still valid.
+ *   common_causes: Missing or expired session, route called outside local mode, backend unavailable.
+ *   recovery_steps: Sign in again if needed, then retry in local development after backend health is restored.
  *   retry_safe: Yes.
  *
  * CODE:
@@ -62,19 +60,15 @@ type DcxAdminPublicSiteLocalRebuildCompleteErrorResponse = {
 
 export async function markDcxAdminPublicSiteLocalRebuildComplete(params: {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }): Promise<DcxAdminPublicSiteLocalRebuildCompleteSuccessResponse> {
   const completeUrl = new URL(
     "/admin/publish/public-site/mark-local-rebuild-complete",
     params.apiBaseUrl,
   )
 
-  if (typeof params.debugAdminUserId === "number" && Number.isFinite(params.debugAdminUserId)) {
-    completeUrl.searchParams.set("admin_user_id", String(params.debugAdminUserId))
-  }
-
   const response = await fetch(completeUrl.toString(), {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },

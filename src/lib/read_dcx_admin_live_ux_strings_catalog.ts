@@ -5,8 +5,7 @@
  * durable backend table while all selection state stays local to the admin screen.
  *
  * CONTRACT:
- * preconditions: The dcx_admin frontend knows the backend base URL and may temporarily provide
- * a local debug admin user id through the browser query string.
+ * preconditions: The dcx_admin frontend knows the backend base URL and carries one authenticated admin/dev session cookie.
  * postconditions: Returns the canonical backend UX-strings-catalog payload on success.
  * side_effects: None.
  * idempotent: Yes.
@@ -18,19 +17,17 @@
  * contract rather than embedding fetch details in the page.
  * WHEN TO USE it: Use it from TanStack Query in the read-only admin UX-strings viewer.
  * WHEN NOT TO USE it: Do not use it for future admin write/update flows.
- * WHAT CAN GO WRONG: The backend can reject the temporary debug admin identity path, or the
- * network can fail.
- * WHAT COMES NEXT: Keep this read path stable while the identity source changes from local
- * `?admin_user_id=` testing to real admin session-backed auth.
+ * WHAT CAN GO WRONG: The backend can reject the current session, or the network can fail.
+ * WHAT COMES NEXT: Keep this read path stable while more admin content tooling is added.
  *
  * TESTS:
  * No frontend test harness exists in dcx_admin yet.
  *
  * ERRORS:
  * - DCX_ADMIN_UX_STRINGS_CATALOG_READ_FAILED: The backend returned a non-success wrapper or the fetch failed.
- *   suggested_action: Confirm the API is reachable and add a valid local `?admin_user_id=` while admin auth is not wired yet.
- *   common_causes: Missing debug admin user id, backend unavailable.
- *   recovery_steps: Retry with a valid admin user id locally, then retry after backend health is restored.
+ *   suggested_action: Confirm the API is reachable and the browser still has a valid admin/dev session.
+ *   common_causes: Missing or expired session, backend unavailable.
+ *   recovery_steps: Sign in again, then retry after backend health is restored.
  *   retry_safe: Yes.
  *
  * CODE:
@@ -79,16 +76,12 @@ type DcxAdminLiveUxStringsCatalogErrorResponse = {
 
 export async function readDcxAdminLiveUxStringsCatalog(params: {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }): Promise<DcxAdminLiveUxStringsCatalogSuccessResponse> {
   const catalogUrl = new URL("/admin/content/ux-strings/catalog", params.apiBaseUrl)
 
-  if (typeof params.debugAdminUserId === "number" && Number.isFinite(params.debugAdminUserId)) {
-    catalogUrl.searchParams.set("admin_user_id", String(params.debugAdminUserId))
-  }
-
   const response = await fetch(catalogUrl.toString(), {
     method: "GET",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },

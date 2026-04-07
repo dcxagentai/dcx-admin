@@ -14,7 +14,6 @@ import {
 
 type Props = {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }
 
 function formatTimestampLabel(timestampMs: number | null): string {
@@ -50,11 +49,10 @@ function buildLanguageCount(users: DcxAdminUserListRow[]): number {
 
 export function DcxAdminUsersListPage(props: Props) {
   const usersListQuery = useQuery({
-    queryKey: ["dcx_admin_users_list", props.debugAdminUserId],
+    queryKey: ["dcx_admin_users_list"],
     queryFn: async () =>
       readDcxAdminUsersList({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
   })
 
@@ -84,9 +82,6 @@ export function DcxAdminUsersListPage(props: Props) {
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
               Read-only MVP admin surface
             </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-              Local debug admin: {props.debugAdminUserId ?? "not provided"}
-            </span>
             <Button
               type="button"
               variant="outline"
@@ -115,7 +110,7 @@ export function DcxAdminUsersListPage(props: Props) {
             </p>
             <p className="text-sm text-slate-500">
               {(usersListQuery.error as Error & { suggested_action?: string }).suggested_action ??
-                "Use ?admin_user_id=<existing_user_id> locally until admin auth is connected."}
+                "Sign in with a valid admin or dev session, then retry."}
             </p>
           </div>
         ) : null}

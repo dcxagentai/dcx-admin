@@ -15,7 +15,6 @@ import { triggerDcxAdminPublicSitePublishRun } from "../lib/trigger_dcx_admin_pu
 
 type Props = {
   apiBaseUrl: string
-  debugAdminUserId: number | null
 }
 
 type PublishHealthTone = "green" | "orange" | "red"
@@ -115,22 +114,20 @@ function PendingChangeRow(props: { row: DcxAdminPublicSitePendingChangePreviewRo
 export function DcxAdminPublicSitePublishPage(props: Props) {
   const queryClient = useQueryClient()
   const publishStatusQuery = useQuery({
-    queryKey: ["dcx_admin_public_site_publish_status", props.debugAdminUserId],
+    queryKey: ["dcx_admin_public_site_publish_status"],
     queryFn: async () =>
       readDcxAdminPublicSitePublishStatus({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
   })
   const publishMutation = useMutation({
     mutationFn: async () =>
       triggerDcxAdminPublicSitePublishRun({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["dcx_admin_public_site_publish_status", props.debugAdminUserId],
+        queryKey: ["dcx_admin_public_site_publish_status"],
       })
     },
   })
@@ -138,11 +135,10 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
     mutationFn: async () =>
       markDcxAdminPublicSiteLocalRebuildComplete({
         apiBaseUrl: props.apiBaseUrl,
-        debugAdminUserId: props.debugAdminUserId,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["dcx_admin_public_site_publish_status", props.debugAdminUserId],
+        queryKey: ["dcx_admin_public_site_publish_status"],
       })
     },
   })
@@ -201,7 +197,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
             </p>
             <p className="text-sm text-slate-500">
               {(publishStatusQuery.error as Error & { suggested_action?: string }).suggested_action ??
-                "Use ?admin_user_id=<existing_user_id> locally until admin auth is connected."}
+                "Sign in with a valid admin or dev session, then retry."}
             </p>
           </div>
         ) : null}

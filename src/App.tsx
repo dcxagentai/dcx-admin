@@ -3,15 +3,31 @@
  * Root app composition for the DCX admin internal workspace.
  * It now projects the first internal surfaces into stable path-based routes so clients and
  * internal users can think in terms of `/users`, `/translations/ux`, and `/translations/emails`
- * while deeper selection state still lives locally inside each screen.
+ * while the shared session bootstrap decides whether this browser may enter the protected
+ * admin workspace at all.
  */
 import { useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
 
+import { DcxAdminAuthLoginPage } from "./components/dcx_admin_auth_login_page"
 import { DcxAdminEmailsCatalogPage } from "./components/dcx_admin_emails_catalog_page"
 import { DcxAdminPublicSitePublishPage } from "./components/dcx_admin_public_site_publish_page"
 import { DcxAdminUsersListPage } from "./components/dcx_admin_users_list_page"
 import { DcxAdminUxStringsCatalogPage } from "./components/dcx_admin_ux_strings_catalog_page"
+import { loginDcxUserWithEmailAndPassword } from "./lib/login_dcx_user_with_email_and_password"
+import { logoutAuthenticatedDcxUser } from "./lib/logout_authenticated_dcx_user"
+import { readDcxAuthenticatedSession } from "./lib/read_dcx_authenticated_session"
+
+const DCX_AUTH_LOGOUT_SYNC_STORAGE_KEY = "dcx_auth_logout_at_ts_ms"
+
+function redirectToLoginScreen(): void {
+  if (window.location.pathname === "/login" && window.location.search === "") {
+    return
+  }
+
+  window.location.replace("/login")
+}
 
 type DcxAdminScreen = "users" | "ux_strings" | "emails" | "publish_public_site"
 
@@ -92,6 +108,18 @@ function buildPathnameForEmailType(emailType: string | null): string {
   return `/translations/emails/${encodeURIComponent(emailType)}`
 }
 
+function readDcxAdminApiBaseUrl(): string {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+
+  if (window.location.hostname === "127.0.0.1") {
+    return "http://127.0.0.1:8000"
+  }
+
+  return "http://localhost:8000"
+}
+
 function DcxAdminWorkspaceTabButton(props: {
   label: string
   isActive: boolean
@@ -114,21 +142,63 @@ function DcxAdminWorkspaceTabButton(props: {
 }
 
 function App() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
-  const currentSearchParams = new URLSearchParams(window.location.search)
-  const requestedDebugAdminUserId = currentSearchParams.get("admin_user_id")
-  const debugAdminUserId =
-    requestedDebugAdminUserId !== null && /^\d+$/.test(requestedDebugAdminUserId)
-      ? Number(requestedDebugAdminUserId)
-      : null
+  const queryClient = useQueryClient()
+  const apiBaseUrl = readDcxAdminApiBaseUrl()
+  const appBaseUrl =
+    import.meta.env.VITE_APP_BASE_URL ??
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:5173"
+      : "https://app.dcxagent.ai")
   const [routeState, setRouteState] = useState<DcxAdminRouteState>(() =>
     readDcxAdminRouteStateFromPathname(window.location.pathname),
   )
+  const authenticatedSessionQuery = useQuery({
+    queryKey: ["dcx_authenticated_session"],
+    queryFn: async () =>
+      readDcxAuthenticatedSession({
+        apiBaseUrl,
+      }),
+    retry: false,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
+  })
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { email: string; password: string }) =>
+      loginDcxUserWithEmailAndPassword({
+        apiBaseUrl,
+        email: credentials.email,
+        password: credentials.password,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["dcx_authenticated_session"] })
+      navigateToPathname("/users")
+    },
+  })
+  const logoutMutation = useMutation({
+    mutationFn: async () =>
+      logoutAuthenticatedDcxUser({
+        apiBaseUrl,
+      }),
+    onSuccess: async () => {
+      localStorage.setItem(DCX_AUTH_LOGOUT_SYNC_STORAGE_KEY, String(Date.now()))
+      queryClient.removeQueries({ queryKey: ["dcx_authenticated_session"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_users_list"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      redirectToLoginScreen()
+    },
+  })
 
   useEffect(() => {
+    if (window.location.search !== "") {
+      window.history.replaceState({}, "", window.location.pathname)
+    }
+
     const normalizedRouteState = readDcxAdminRouteStateFromPathname(window.location.pathname)
-    if (window.location.pathname !== normalizedRouteState.pathname) {
-      window.history.replaceState({}, "", `${normalizedRouteState.pathname}${window.location.search}`)
+    if (window.location.pathname !== "/login" && window.location.pathname !== normalizedRouteState.pathname) {
+      window.history.replaceState({}, "", normalizedRouteState.pathname)
       setRouteState(normalizedRouteState)
     }
   }, [])
@@ -138,9 +208,34 @@ function App() {
       setRouteState(readDcxAdminRouteStateFromPathname(window.location.pathname))
     }
 
+    const handleVisibilityOrFocusChange = () => {
+      void queryClient.invalidateQueries({ queryKey: ["dcx_authenticated_session"] })
+    }
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== DCX_AUTH_LOGOUT_SYNC_STORAGE_KEY) {
+        return
+      }
+
+      queryClient.removeQueries({ queryKey: ["dcx_authenticated_session"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_users_list"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      redirectToLoginScreen()
+    }
+
     window.addEventListener("popstate", handlePopState)
-    return () => window.removeEventListener("popstate", handlePopState)
-  }, [])
+    window.addEventListener("focus", handleVisibilityOrFocusChange)
+    window.addEventListener("storage", handleStorageEvent)
+    document.addEventListener("visibilitychange", handleVisibilityOrFocusChange)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+      window.removeEventListener("focus", handleVisibilityOrFocusChange)
+      window.removeEventListener("storage", handleStorageEvent)
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocusChange)
+    }
+  }, [queryClient])
 
   function navigateToPathname(nextPathname: string): void {
     if (window.location.pathname === nextPathname) {
@@ -148,12 +243,106 @@ function App() {
       return
     }
 
-    window.history.pushState({}, "", `${nextPathname}${window.location.search}`)
+    window.history.pushState({}, "", nextPathname)
     setRouteState(readDcxAdminRouteStateFromPathname(nextPathname))
   }
 
   const activeScreen = routeState.activeScreen
   const initialEmailType = useMemo(() => routeState.initialEmailType, [routeState.initialEmailType])
+  const sessionRequiredErrorCode =
+    (authenticatedSessionQuery.error as Error & { code?: string } | null)?.code ?? null
+  const isSessionExplicitlyMissing = sessionRequiredErrorCode === "API_DCX_AUTH_SESSION_REQUIRED"
+  const authenticatedSessionSummary = isSessionExplicitlyMissing
+    ? null
+    : authenticatedSessionQuery.data?.data ?? null
+
+  useEffect(() => {
+    if (
+      authenticatedSessionSummary?.allowed_surfaces.admin &&
+      window.location.pathname === "/login"
+    ) {
+      navigateToPathname("/users")
+      return
+    }
+
+    if (
+      !authenticatedSessionSummary &&
+      !authenticatedSessionQuery.isLoading &&
+      window.location.pathname !== "/login"
+    ) {
+      queryClient.removeQueries({ queryKey: ["dcx_admin_users_list"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      redirectToLoginScreen()
+    }
+  }, [
+    authenticatedSessionQuery.isLoading,
+    authenticatedSessionSummary,
+    queryClient,
+  ])
+
+  if (authenticatedSessionQuery.isLoading && !authenticatedSessionSummary) {
+    return (
+      <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-4xl rounded-[1.75rem] border border-black/6 bg-white px-6 py-8 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+          <p className="text-sm text-slate-500">Checking DCX admin session...</p>
+        </section>
+      </main>
+    )
+  }
+
+  if (!authenticatedSessionSummary) {
+    return (
+      <DcxAdminAuthLoginPage
+        isPending={loginMutation.isPending}
+        errorMessage={
+          loginMutation.isError
+            ? (loginMutation.error as Error & { suggested_action?: string }).message
+            : authenticatedSessionQuery.isError
+              ? (authenticatedSessionQuery.error as Error & { suggested_action?: string }).message
+              : null
+        }
+        onSubmit={(email, password) => loginMutation.mutate({ email, password })}
+        onForgotPassword={() => {
+          window.location.assign(`${appBaseUrl.replace(/\/$/, "")}/password/reset/request`)
+        }}
+      />
+    )
+  }
+
+  if (
+    authenticatedSessionSummary &&
+    !authenticatedSessionSummary.allowed_surfaces.admin
+  ) {
+    return (
+      <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-5xl rounded-[1.75rem] border border-black/6 bg-white px-6 py-8 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-red-500">
+              Admin access blocked
+            </p>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              This session can enter the app, but not the admin domain.
+            </h1>
+            <p className="max-w-3xl text-sm leading-6 text-slate-600">
+              The current user role is `{authenticatedSessionSummary.user_role}`. Only `admin` and
+              `dev` roles should access the internal admin workspace.
+            </p>
+            <div className="flex flex-wrap gap-3 pt-3">
+              <button
+                type="button"
+                onClick={() => logoutMutation.mutate()}
+                className="rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+              >
+                {logoutMutation.isPending ? "Signing out..." : "Logout"}
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
@@ -178,12 +367,23 @@ function App() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-              Local debug admin: {debugAdminUserId ?? "not provided"}
-            </span>
+            {authenticatedSessionSummary ? (
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+                {authenticatedSessionSummary.primary_email} · {authenticatedSessionSummary.user_role}
+              </span>
+            ) : null}
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
               Path-based admin routes now active
             </span>
+            {authenticatedSessionSummary ? (
+              <button
+                type="button"
+                onClick={() => logoutMutation.mutate()}
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm transition hover:border-slate-300 hover:text-slate-950"
+              >
+                {logoutMutation.isPending ? "Signing out..." : "Logout"}
+              </button>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-3 border-t border-black/6 pt-4">
@@ -211,17 +411,20 @@ function App() {
         </header>
 
         {activeScreen === "users" ? (
-          <DcxAdminUsersListPage apiBaseUrl={apiBaseUrl} debugAdminUserId={debugAdminUserId} />
+          <DcxAdminUsersListPage
+            apiBaseUrl={apiBaseUrl}
+          />
         ) : null}
 
         {activeScreen === "ux_strings" ? (
-          <DcxAdminUxStringsCatalogPage apiBaseUrl={apiBaseUrl} debugAdminUserId={debugAdminUserId} />
+          <DcxAdminUxStringsCatalogPage
+            apiBaseUrl={apiBaseUrl}
+          />
         ) : null}
 
         {activeScreen === "emails" ? (
           <DcxAdminEmailsCatalogPage
             apiBaseUrl={apiBaseUrl}
-            debugAdminUserId={debugAdminUserId}
             initialEmailType={initialEmailType}
             onEmailTypeRouteChange={(nextEmailType) =>
               navigateToPathname(buildPathnameForEmailType(nextEmailType))
@@ -232,7 +435,6 @@ function App() {
         {activeScreen === "publish_public_site" ? (
           <DcxAdminPublicSitePublishPage
             apiBaseUrl={apiBaseUrl}
-            debugAdminUserId={debugAdminUserId}
           />
         ) : null}
       </section>
