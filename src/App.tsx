@@ -4,7 +4,7 @@
  * It now projects the first internal surfaces into stable path-based routes so clients and
  * internal users can think in terms of `/users`, `/translations/ux`, and `/translations/emails`
  * while the shared session bootstrap decides whether this browser may enter the protected
- * admin workspace at all.
+ * admin workspace at all cleanly.
  */
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
