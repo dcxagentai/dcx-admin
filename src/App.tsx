@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
 
 import { DcxAdminAuthLoginPage } from "./components/dcx_admin_auth_login_page"
+import { DcxAdminContentPageCategoriesPage } from "./components/dcx_admin_content_page_categories_page"
 import { DcxAdminContentPagesPage } from "./components/dcx_admin_content_pages_page"
 import { DcxAdminEmailsCatalogPage } from "./components/dcx_admin_emails_catalog_page"
 import { DcxAdminNewslettersPage } from "./components/dcx_admin_newsletters_page"
@@ -33,6 +34,7 @@ function redirectToLoginScreen(): void {
 
 type DcxAdminScreen =
   | "users"
+  | "content_page_categories"
   | "ux_strings"
   | "emails"
   | "content_pages"
@@ -45,11 +47,44 @@ type DcxAdminRouteState = {
   routeChipLabel: string
   initialEmailType: string | null
   routeLanguageCode: string | null
+  routeCategoryKey: string | null
   routePageKey: string | null
   routeNewsletterKey: string | null
 }
 
 function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteState {
+  if (pathname === "/content/page-categories") {
+    return {
+      activeScreen: "content_page_categories",
+      pathname,
+      routeChipLabel: pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/content/page-categories/")) {
+    const categorySegments = pathname
+      .replace("/content/page-categories/", "")
+      .split("/")
+      .filter(Boolean)
+    if (categorySegments.length >= 2) {
+      return {
+        activeScreen: "content_page_categories",
+        pathname,
+        routeChipLabel: pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(categorySegments[0]),
+        routeCategoryKey: decodeURIComponent(categorySegments.slice(1).join("/")),
+        routePageKey: null,
+        routeNewsletterKey: null,
+      }
+    }
+  }
+
   if (pathname === "/content/pages") {
     return {
       activeScreen: "content_pages",
@@ -57,6 +92,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -71,6 +107,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
         routeChipLabel: pathname,
         initialEmailType: null,
         routeLanguageCode: decodeURIComponent(pageSegments[0]),
+        routeCategoryKey: null,
         routePageKey: decodeURIComponent(pageSegments.slice(1).join("/")),
         routeNewsletterKey: null,
       }
@@ -84,6 +121,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -101,6 +139,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
         routeChipLabel: pathname,
         initialEmailType: null,
         routeLanguageCode: decodeURIComponent(newsletterSegments[0]),
+        routeCategoryKey: null,
         routePageKey: null,
         routeNewsletterKey: decodeURIComponent(newsletterSegments.slice(1).join("/")),
       }
@@ -114,6 +153,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -126,6 +166,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -139,6 +180,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: emailType === "" ? null : decodeURIComponent(emailType),
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -151,6 +193,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
+      routeCategoryKey: null,
       routePageKey: null,
       routeNewsletterKey: null,
     }
@@ -162,12 +205,17 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     routeChipLabel: "/users",
     initialEmailType: null,
     routeLanguageCode: null,
+    routeCategoryKey: null,
     routePageKey: null,
     routeNewsletterKey: null,
   }
 }
 
 function buildPathnameForScreen(screen: DcxAdminScreen): string {
+  if (screen === "content_page_categories") {
+    return "/content/page-categories"
+  }
+
   if (screen === "content_pages") {
     return "/content/pages"
   }
@@ -197,6 +245,10 @@ function buildPathnameForEmailType(emailType: string | null): string {
   }
 
   return `/translations/emails/${encodeURIComponent(emailType)}`
+}
+
+function buildPathnameForContentPageCategory(params: { languageCode: string; categoryKey: string }): string {
+  return `/content/page-categories/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.categoryKey)}`
 }
 
 function buildPathnameForContentPage(params: { languageCode: string; pageKey: string }): string {
@@ -286,6 +338,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_category_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_pages_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
@@ -326,6 +379,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_category_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_pages_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
@@ -359,6 +413,7 @@ function App() {
   const activeScreen = routeState.activeScreen
   const initialEmailType = useMemo(() => routeState.initialEmailType, [routeState.initialEmailType])
   const routeLanguageCode = routeState.routeLanguageCode
+  const routeCategoryKey = routeState.routeCategoryKey
   const routePageKey = routeState.routePageKey
   const routeNewsletterKey = routeState.routeNewsletterKey
   const sessionRequiredErrorCode =
@@ -386,6 +441,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_ux_strings_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_live_emails_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_category_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_pages_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_content_page_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
@@ -510,6 +566,11 @@ function App() {
               onClick={() => navigateToPathname(buildPathnameForScreen("users"))}
             />
             <DcxAdminWorkspaceTabButton
+              label="Categories"
+              isActive={activeScreen === "content_page_categories"}
+              onClick={() => navigateToPathname(buildPathnameForScreen("content_page_categories"))}
+            />
+            <DcxAdminWorkspaceTabButton
               label="Pages"
               isActive={activeScreen === "content_pages"}
               onClick={() => navigateToPathname(buildPathnameForScreen("content_pages"))}
@@ -540,6 +601,15 @@ function App() {
         {activeScreen === "users" ? (
           <DcxAdminUsersListPage
             apiBaseUrl={apiBaseUrl}
+          />
+        ) : null}
+
+        {activeScreen === "content_page_categories" ? (
+          <DcxAdminContentPageCategoriesPage
+            apiBaseUrl={apiBaseUrl}
+            routeLanguageCode={routeLanguageCode}
+            routeCategoryKey={routeCategoryKey}
+            onOpenCategory={(params) => navigateToPathname(buildPathnameForContentPageCategory(params))}
           />
         ) : null}
 

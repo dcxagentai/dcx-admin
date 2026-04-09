@@ -290,7 +290,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<EditorVisualState>("idle")
   const [statusText, setStatusText] = useState(
-    "Blue means editable. Changes autosave after a short pause.",
+    "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
   )
   const [scheduledSendInput, setScheduledSendInput] = useState("")
   const [sendStatusText, setSendStatusText] = useState(
@@ -302,7 +302,9 @@ export function DcxAdminNewslettersPage(props: Props) {
       setEditorDraft(null)
       setLastSavedSnapshot("")
       setVisualState("idle")
-      setStatusText("Blue means editable. Changes autosave after a short pause.")
+      setStatusText(
+        "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
+      )
       return
     }
 
@@ -313,7 +315,9 @@ export function DcxAdminNewslettersPage(props: Props) {
     setEditorDraft(nextDraft)
     setLastSavedSnapshot(buildDetailSnapshot(detail))
     setVisualState("idle")
-    setStatusText("Blue means editable. Changes autosave after a short pause.")
+    setStatusText(
+      "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
+    )
   }, [detail?.email_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
@@ -357,40 +361,54 @@ export function DcxAdminNewslettersPage(props: Props) {
     [props.routeEmailKey],
   )
 
+  async function persistCurrentDraft(saveLabel: string): Promise<void> {
+    if (!detail || !editorDraft || !isDirty) {
+      return
+    }
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current)
+      autosaveTimeoutRef.current = null
+    }
+
+    setVisualState("saving")
+    setStatusText(saveLabel)
+    try {
+      await saveMutation.mutateAsync({
+        emailId: detail.email_id,
+        emailSubject: editorDraft.email_subject,
+        emailBody: editorDraft.email_body,
+      })
+      setVisualState("saved")
+      setStatusText("Newsletter draft saved.")
+      if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
+      resetStateTimeoutRef.current = setTimeout(() => {
+        setVisualState("idle")
+        setStatusText(
+          "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
+        )
+      }, 1400)
+    } catch (error) {
+      setVisualState("error")
+      setStatusText(
+        (error as Error & { suggested_action?: string }).suggested_action ??
+          "Save failed. Keep the tab open and retry after the backend is healthy.",
+      )
+    }
+  }
+
   useEffect(() => {
     if (!detail || !editorDraft || !isDirty || isAnyWritePending) {
       return
     }
 
     setVisualState("editing")
-    setStatusText("Editing. Autosave will run after a short pause.")
+    setStatusText("Editing. Save now or wait for the 30 second autosave.")
 
     if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
-    autosaveTimeoutRef.current = setTimeout(async () => {
-      setVisualState("saving")
-      setStatusText("Saving newsletter draft...")
-      try {
-        await saveMutation.mutateAsync({
-          emailId: detail.email_id,
-          emailSubject: editorDraft.email_subject,
-          emailBody: editorDraft.email_body,
-        })
-        setVisualState("saved")
-        setStatusText("Newsletter draft saved.")
-        if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
-        resetStateTimeoutRef.current = setTimeout(() => {
-          setVisualState("idle")
-          setStatusText("Blue means editable. Changes autosave after a short pause.")
-        }, 1400)
-      } catch (error) {
-        setVisualState("error")
-        setStatusText(
-          (error as Error & { suggested_action?: string }).suggested_action ??
-            "Autosave failed. Keep the tab open and retry after the backend is healthy.",
-        )
-      }
-    }, 10000)
-  }, [detail, editorDraft, isDirty, isAnyWritePending, saveMutation])
+    autosaveTimeoutRef.current = setTimeout(() => {
+      void persistCurrentDraft("Saving newsletter draft...")
+    }, 30000)
+  }, [detail, editorDraft, isDirty, isAnyWritePending])
 
   async function handlePrepareSendNow() {
     try {
@@ -656,6 +674,17 @@ export function DcxAdminNewslettersPage(props: Props) {
                   }}
                 />
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void persistCurrentDraft("Saving newsletter draft...")}
+                disabled={!isDirty || isAnyWritePending}
+                className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saveMutation.isPending ? "Saving..." : "Save newsletter"}
+              </button>
             </div>
 
             <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
