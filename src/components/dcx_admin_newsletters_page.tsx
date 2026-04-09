@@ -14,6 +14,12 @@ import {
 import { readDcxAdminNewsletterDetail } from "../lib/read_dcx_admin_newsletter_detail"
 import { createDcxAdminNewsletterDraft } from "../lib/create_dcx_admin_newsletter_draft"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
+import {
+  readDcxAdminNewsletterSendsCatalog,
+  type DcxAdminNewsletterSendCatalogRow,
+} from "../lib/read_dcx_admin_newsletter_sends_catalog"
+import { prepareDcxAdminNewsletterSend } from "../lib/prepare_dcx_admin_newsletter_send"
+import { cancelDcxAdminNewsletterSend } from "../lib/cancel_dcx_admin_newsletter_send"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
 
 type Props = {
@@ -32,6 +38,26 @@ function formatTimestampLabel(timestampMs: number | null): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(timestampMs),
   )
+}
+
+function buildDateTimeLocalInputValue(timestampMs: number | null): string {
+  if (typeof timestampMs !== "number") {
+    return ""
+  }
+  const candidateDate = new Date(timestampMs)
+  const pad = (value: number) => value.toString().padStart(2, "0")
+  return `${candidateDate.getFullYear()}-${pad(candidateDate.getMonth() + 1)}-${pad(candidateDate.getDate())}T${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
+}
+
+function readTimestampFromDateTimeLocalInput(value: string): number | null {
+  if (value.trim() === "") {
+    return null
+  }
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return null
+  }
+  return parsedDate.getTime()
 }
 
 function readVisualBorderClass(state: EditorVisualState): string {
@@ -97,6 +123,46 @@ function NewsletterRow(props: {
   )
 }
 
+function NewsletterSendRow(props: {
+  row: DcxAdminNewsletterSendCatalogRow
+  onCancel: () => void
+  cancelDisabled: boolean
+}) {
+  return (
+    <div className="rounded-[1.2rem] border border-black/6 bg-white px-4 py-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-slate-950">
+            {props.row.send_status === "cancelled" ? "Cancelled send" : "Prepared send"}
+          </p>
+          <p className="text-xs text-slate-500">
+            Scheduled {formatTimestampLabel(props.row.scheduled_send_at_ts_ms)}
+          </p>
+        </div>
+        <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+          {props.row.send_status}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-4">
+        <p>{props.row.total_recipient_count} recipients</p>
+        <p>{props.row.send_candidate_count} send candidates</p>
+        <p>{props.row.skipped_recipient_count} skipped</p>
+        <p>{props.row.tracked_link_count} tracked links</p>
+      </div>
+      {props.row.send_status === "scheduled" ? (
+        <button
+          type="button"
+          onClick={props.onCancel}
+          disabled={props.cancelDisabled}
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancel prepared send
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function DcxAdminNewslettersPage(props: Props) {
   const queryClient = useQueryClient()
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -109,6 +175,16 @@ export function DcxAdminNewslettersPage(props: Props) {
     queryKey: ["dcx_admin_newsletter_detail", props.routeLanguageCode, props.routeEmailKey],
     queryFn: async () =>
       readDcxAdminNewsletterDetail({
+        apiBaseUrl: props.apiBaseUrl,
+        emailKey: props.routeEmailKey ?? "",
+        languageCode: props.routeLanguageCode ?? "en",
+      }),
+    enabled: Boolean(props.routeEmailKey && props.routeLanguageCode),
+  })
+  const sendsCatalogQuery = useQuery({
+    queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
+    queryFn: async () =>
+      readDcxAdminNewsletterSendsCatalog({
         apiBaseUrl: props.apiBaseUrl,
         emailKey: props.routeEmailKey ?? "",
         languageCode: props.routeLanguageCode ?? "en",
@@ -147,15 +223,46 @@ export function DcxAdminNewslettersPage(props: Props) {
       ])
     },
   })
+  const prepareSendMutation = useMutation({
+    mutationFn: async (params: { scheduledSendAtTsMs: number | null }) =>
+      prepareDcxAdminNewsletterSend({
+        apiBaseUrl: props.apiBaseUrl,
+        emailKey: props.routeEmailKey ?? "",
+        languageCode: props.routeLanguageCode ?? "en",
+        scheduledSendAtTsMs: params.scheduledSendAtTsMs,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
+      })
+    },
+  })
+  const cancelSendMutation = useMutation({
+    mutationFn: async (params: { emailSendId: number }) =>
+      cancelDcxAdminNewsletterSend({
+        apiBaseUrl: props.apiBaseUrl,
+        emailSendId: params.emailSendId,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
+      })
+    },
+  })
 
   const newsletters = catalogQuery.data?.data.newsletters ?? []
   const detail = detailQuery.data?.data ?? null
+  const preparedSends = sendsCatalogQuery.data?.data.newsletter_sends ?? []
   const [newNewsletterSubject, setNewNewsletterSubject] = useState("")
   const [editorDraft, setEditorDraft] = useState<{ email_subject: string; email_body: string } | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<EditorVisualState>("idle")
   const [statusText, setStatusText] = useState(
     "Blue means editable. Changes autosave after a short pause.",
+  )
+  const [scheduledSendInput, setScheduledSendInput] = useState("")
+  const [sendStatusText, setSendStatusText] = useState(
+    "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
   )
 
   useEffect(() => {
@@ -178,6 +285,16 @@ export function DcxAdminNewslettersPage(props: Props) {
   }, [detail?.email_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
+    if (!detail) {
+      return
+    }
+    setScheduledSendInput(buildDateTimeLocalInputValue(Date.now() + 60 * 60 * 1000))
+    setSendStatusText(
+      "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
+    )
+  }, [detail?.email_id])
+
+  useEffect(() => {
     return () => {
       if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
       if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
@@ -187,6 +304,9 @@ export function DcxAdminNewslettersPage(props: Props) {
   const draftSnapshot = editorDraft ? buildDraftSnapshot(editorDraft) : ""
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
   const isAnyWritePending = createDraftMutation.isPending || saveMutation.isPending
+  const scheduledSendAtTsMs = readTimestampFromDateTimeLocalInput(scheduledSendInput)
+  const isSendMutationPending = prepareSendMutation.isPending || cancelSendMutation.isPending
+  const canPrepareSend = detail !== null && !isDirty && !isAnyWritePending && !isSendMutationPending
   const selectedNewsletterIds = useMemo(
     () => new Set(props.routeEmailKey ? [props.routeEmailKey] : []),
     [props.routeEmailKey],
@@ -226,6 +346,54 @@ export function DcxAdminNewslettersPage(props: Props) {
       }
     }, 10000)
   }, [detail, editorDraft, isDirty, isAnyWritePending, saveMutation])
+
+  async function handlePrepareSendNow() {
+    try {
+      const payload = await prepareSendMutation.mutateAsync({ scheduledSendAtTsMs: null })
+      setSendStatusText(
+        `Prepared one newsletter send for ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}.`,
+      )
+    } catch (error) {
+      setSendStatusText(
+        (error as Error & { suggested_action?: string }).suggested_action ??
+          "We could not prepare that newsletter send just now.",
+      )
+    }
+  }
+
+  async function handlePrepareScheduledSend() {
+    if (scheduledSendAtTsMs === null) {
+      setSendStatusText("Choose one valid date and time before preparing a scheduled send.")
+      return
+    }
+    try {
+      const payload = await prepareSendMutation.mutateAsync({
+        scheduledSendAtTsMs,
+      })
+      setSendStatusText(
+        `Prepared one scheduled newsletter send for ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}.`,
+      )
+    } catch (error) {
+      setSendStatusText(
+        (error as Error & { suggested_action?: string }).suggested_action ??
+          "We could not prepare that scheduled send just now.",
+      )
+    }
+  }
+
+  async function handleCancelPreparedSend(emailSendId: number) {
+    try {
+      const payload = await cancelSendMutation.mutateAsync({ emailSendId })
+      setSendStatusText(
+        `Prepared send ${payload.data.email_send_id} is now ${payload.data.send_status}.`,
+      )
+    } catch (error) {
+      setSendStatusText(
+        (error as Error & { suggested_action?: string }).suggested_action ??
+          "We could not cancel that prepared send just now.",
+      )
+    }
+  }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
@@ -368,6 +536,75 @@ export function DcxAdminNewslettersPage(props: Props) {
                 />
               </div>
             </div>
+
+            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Send preparation
+                  </p>
+                  <h4 className="text-lg font-semibold tracking-tight text-slate-950">
+                    Prepare newsletter sends
+                  </h4>
+                </div>
+                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                  {sendsCatalogQuery.data?.data.total_send_count ?? 0} prepared sends
+                </div>
+              </div>
+
+              <p className="text-sm leading-6 text-slate-600">{sendStatusText}</p>
+
+              <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+                <input
+                  type="datetime-local"
+                  value={scheduledSendInput}
+                  onChange={(event) => setScheduledSendInput(event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handlePrepareSendNow}
+                  disabled={!canPrepareSend}
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {prepareSendMutation.isPending ? "Preparing..." : "Prepare send now"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrepareScheduledSend}
+                  disabled={!canPrepareSend || scheduledSendAtTsMs === null}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Prepare scheduled send
+                </button>
+              </div>
+
+              {sendsCatalogQuery.isLoading ? (
+                <p className="text-sm text-slate-500">Loading prepared sends...</p>
+              ) : null}
+              {sendsCatalogQuery.isError ? (
+                <p className="text-sm text-red-600">
+                  {(sendsCatalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
+                    (sendsCatalogQuery.error as Error).message}
+                </p>
+              ) : null}
+
+              <div className="space-y-3">
+                {preparedSends.map((preparedSend) => (
+                  <NewsletterSendRow
+                    key={preparedSend.email_send_id}
+                    row={preparedSend}
+                    onCancel={() => handleCancelPreparedSend(preparedSend.email_send_id)}
+                    cancelDisabled={isSendMutationPending}
+                  />
+                ))}
+                {preparedSends.length === 0 && !sendsCatalogQuery.isLoading ? (
+                  <p className="text-sm text-slate-500">
+                    No prepared sends exist for this newsletter yet.
+                  </p>
+                ) : null}
+              </div>
+            </section>
 
             <dl>
               <MetadataRow label="Email key" value={detail.email_key} />
