@@ -1,7 +1,7 @@
 /**
  * CONTEXT:
  * First publish/deploy screen for the DCX admin frontend.
- * It exists so internal users can see whether public-copy edits are waiting for publish and can
+ * It exists so internal users can see whether public-copy and published-page edits are waiting for publish and can
  * manually trigger a new Cloudflare Pages rebuild now that dcx_public reads live DB content at build time.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -100,11 +100,18 @@ function PendingChangeRow(props: { row: DcxAdminPublicSitePendingChangePreviewRo
     <li className="flex flex-wrap items-center justify-between gap-4 border-b border-black/5 py-3 last:border-b-0">
       <div className="min-w-0 space-y-1">
         <p className="text-sm font-medium text-slate-950">
-          {props.row.string_group} / {props.row.string_key}
+          {props.row.primary_label}
         </p>
+        {props.row.secondary_label ? (
+          <p className="text-sm text-slate-600">{props.row.secondary_label}</p>
+        ) : null}
         <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-          {props.row.language_name_native} ({props.row.language_code})
+          {props.row.content_kind.replace("_", " ")} · {props.row.language_name_native} (
+          {props.row.language_code})
         </p>
+        {props.row.public_path ? (
+          <p className="text-xs text-slate-500">{props.row.public_path}</p>
+        ) : null}
       </div>
       <p className="text-sm text-slate-600">{formatTimestampLabel(props.row.updated_at_ts_ms)}</p>
     </li>
@@ -166,9 +173,9 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
               Publish public site
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              Public UX-string edits now save straight into the live database. This screen shows
-              whether Cloudflare Pages still needs a rebuild and lets you trigger that rebuild
-              manually.
+              Public UX-string edits and published content pages now save straight into the live
+              database. This screen shows whether Cloudflare Pages still needs a rebuild and lets
+              you trigger that rebuild manually.
             </p>
           </div>
           <div
@@ -219,7 +226,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                   Green means no newer public DB edits are waiting. Orange means a few live public
                   rows have changed since the last accepted publish trigger or your local site still
                   needs a manual rebuild. Red means the publish loop either failed or too many
-                  changes are waiting.
+                  public changes are waiting.
                 </p>
               </div>
 
@@ -238,8 +245,8 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                   value={publishStatus.last_publish_message ?? "Not set"}
                 />
                 <MetadataRow
-                  label="Managed groups"
-                  value={publishStatus.public_managed_groups.join(", ")}
+                  label="Managed content"
+                  value={publishStatus.public_managed_content_kinds.join(", ")}
                 />
               </dl>
             </article>
@@ -254,8 +261,8 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                 </h3>
                 <p className="text-sm leading-6 text-white/70">
                   {isLocalManualMode
-                    ? "The public frontend now fetches the live public UX-string bundle from dcx_api during static generation. In local development, publish records that you still need to run npm run dev or npm run build in dcx_public, then mark the local rebuild complete."
-                    : "The public frontend now fetches the live public UX-string bundle from dcx_api during static generation. In hosted environments, publish asks Cloudflare Pages to rebuild against the current database state."}
+                    ? "The public frontend now fetches the live public content bundle from dcx_api during static generation. In local development, publish records that you still need to run npm run dev or npm run build in dcx_public, then mark the local rebuild complete."
+                    : "The public frontend now fetches the live public content bundle from dcx_api during static generation. In hosted environments, publish asks Cloudflare Pages to rebuild against the current database state."}
                 </p>
                 <button
                   type="button"
@@ -329,8 +336,8 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                 Current live rows waiting for publish
               </h3>
               <p className="text-sm leading-6 text-slate-600">
-                This is the current live public-copy state that has changed since the last accepted
-                publish trigger.
+                This is the current live public-copy and content state that has changed since the
+                last accepted publish trigger.
               </p>
             </div>
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
@@ -346,7 +353,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
             <ul>
               {publishStatus.pending_changes_preview.map((row) => (
                 <PendingChangeRow
-                  key={`${row.ux_string_id}-${row.language_code}-${row.updated_at_ts_ms}`}
+                  key={`${row.content_kind}-${row.item_id}-${row.language_code}-${row.updated_at_ts_ms}`}
                   row={row}
                 />
               ))}

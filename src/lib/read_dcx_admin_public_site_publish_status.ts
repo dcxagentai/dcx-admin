@@ -33,9 +33,11 @@
  * CODE:
  */
 export type DcxAdminPublicSitePendingChangePreviewRow = {
-  ux_string_id: number
-  string_group: string
-  string_key: string
+  content_kind: "ux_string" | "content_page"
+  item_id: number
+  primary_label: string
+  secondary_label: string | null
+  public_path: string | null
   language_code: string
   language_name_native: string
   updated_at_ts_ms: number
@@ -55,6 +57,7 @@ export type DcxAdminPublicSitePublishStatusData = {
   updated_at_ts_ms: number
   pending_change_count: number
   pending_changes_preview: DcxAdminPublicSitePendingChangePreviewRow[]
+  public_managed_content_kinds: string[]
   public_managed_groups: string[]
 }
 
