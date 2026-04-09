@@ -79,20 +79,37 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
   const queryClient = useQueryClient()
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [localSelectedCategoryKey, setLocalSelectedCategoryKey] = useState<string | null>(
+    props.routeCategoryKey,
+  )
+  const [localSelectedLanguageCode, setLocalSelectedLanguageCode] = useState<string | null>(
+    props.routeLanguageCode,
+  )
+  const effectiveCategoryKey = props.routeCategoryKey ?? localSelectedCategoryKey
+  const effectiveLanguageCode = props.routeLanguageCode ?? localSelectedLanguageCode
   const categoriesQuery = useQuery({
     queryKey: ["dcx_admin_content_page_categories_catalog"],
     queryFn: async () => readDcxAdminContentPageCategoriesCatalog({ apiBaseUrl: props.apiBaseUrl }),
   })
   const categoryDetailQuery = useQuery({
-    queryKey: ["dcx_admin_content_page_category_detail", props.routeLanguageCode, props.routeCategoryKey],
+    queryKey: ["dcx_admin_content_page_category_detail", effectiveLanguageCode, effectiveCategoryKey],
     queryFn: async () =>
       readDcxAdminContentPageCategoryDetail({
         apiBaseUrl: props.apiBaseUrl,
-        categoryKey: props.routeCategoryKey ?? "",
-        languageCode: props.routeLanguageCode ?? "en",
+        categoryKey: effectiveCategoryKey ?? "",
+        languageCode: effectiveLanguageCode ?? "en",
       }),
-    enabled: Boolean(props.routeCategoryKey && props.routeLanguageCode),
+    enabled: Boolean(effectiveCategoryKey && effectiveLanguageCode),
   })
+
+  useEffect(() => {
+    if (props.routeCategoryKey) {
+      setLocalSelectedCategoryKey(props.routeCategoryKey)
+    }
+    if (props.routeLanguageCode) {
+      setLocalSelectedLanguageCode(props.routeLanguageCode)
+    }
+  }, [props.routeCategoryKey, props.routeLanguageCode])
 
   const createDraftMutation = useMutation({
     mutationFn: async (params: { categoryName: string; languageCode: string }) =>
@@ -103,6 +120,8 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
       }),
     onSuccess: async (payload) => {
       await queryClient.invalidateQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] })
+      setLocalSelectedCategoryKey(payload.data.category_key)
+      setLocalSelectedLanguageCode(payload.data.language_code)
       props.onOpenCategory({
         categoryKey: payload.data.category_key,
         languageCode: payload.data.language_code,
@@ -122,7 +141,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] }),
         queryClient.invalidateQueries({
-          queryKey: ["dcx_admin_content_page_category_detail", props.routeLanguageCode, props.routeCategoryKey],
+          queryKey: ["dcx_admin_content_page_category_detail", effectiveLanguageCode, effectiveCategoryKey],
         }),
         queryClient.invalidateQueries({ queryKey: ["dcx_admin_public_site_publish_status"] }),
       ])
@@ -132,17 +151,19 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
     mutationFn: async (params: { targetLanguageCode: string }) =>
       createDcxAdminContentPageCategoryTranslation({
         apiBaseUrl: props.apiBaseUrl,
-        categoryKey: props.routeCategoryKey ?? "",
-        sourceLanguageCode: props.routeLanguageCode ?? "en",
+        categoryKey: effectiveCategoryKey ?? "",
+        sourceLanguageCode: effectiveLanguageCode ?? "en",
         targetLanguageCode: params.targetLanguageCode,
       }),
     onSuccess: async (payload) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["dcx_admin_content_page_categories_catalog"] }),
         queryClient.invalidateQueries({
-          queryKey: ["dcx_admin_content_page_category_detail", props.routeLanguageCode, props.routeCategoryKey],
+          queryKey: ["dcx_admin_content_page_category_detail", effectiveLanguageCode, effectiveCategoryKey],
         }),
       ])
+      setLocalSelectedCategoryKey(payload.data.category_key)
+      setLocalSelectedLanguageCode(payload.data.language_code)
       props.onOpenCategory({
         categoryKey: payload.data.category_key,
         languageCode: payload.data.language_code,
@@ -234,8 +255,8 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
   }, [detail, editorDraft, isDirty, isAnyWritePending])
 
   const selectedCategoryKeys = useMemo(
-    () => new Set(props.routeCategoryKey ? [props.routeCategoryKey] : []),
-    [props.routeCategoryKey],
+    () => new Set(effectiveCategoryKey ? [effectiveCategoryKey] : []),
+    [effectiveCategoryKey],
   )
 
   function updateDraft(patch: Partial<DraftState>) {
@@ -302,12 +323,14 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               <button
                 key={category.category_key}
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setLocalSelectedCategoryKey(category.category_key)
+                  setLocalSelectedLanguageCode(category.language.language_code)
                   props.onOpenCategory({
                     categoryKey: category.category_key,
                     languageCode: category.language.language_code,
                   })
-                }
+                }}
                 className={[
                   "flex w-full flex-col gap-1 rounded-[1.25rem] border px-4 py-4 text-left transition",
                   selectedCategoryKeys.has(category.category_key)
@@ -346,8 +369,15 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
           ) : null}
         </div>
 
-        {!props.routeCategoryKey ? (
+        {!effectiveCategoryKey ? (
           <p className="text-sm text-slate-500">Choose a category from the list or create a new one.</p>
+        ) : null}
+
+        {effectiveCategoryKey && categoryDetailQuery.isError ? (
+          <p className="text-sm text-red-600">
+            {(categoryDetailQuery.error as Error & { suggested_action?: string }).suggested_action ??
+              (categoryDetailQuery.error as Error).message}
+          </p>
         ) : null}
 
         {detail && editorDraft ? (
@@ -366,12 +396,14 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
                   <button
                     key={translation.language.language_code}
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      setLocalSelectedCategoryKey(translation.category_key)
+                      setLocalSelectedLanguageCode(translation.language.language_code)
                       props.onOpenCategory({
                         categoryKey: translation.category_key,
                         languageCode: translation.language.language_code,
                       })
-                    }
+                    }}
                     className={[
                       "rounded-full border px-4 py-2 text-sm font-medium transition",
                       translation.is_current_language
