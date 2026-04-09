@@ -20,6 +20,7 @@ export type DcxAdminNewsletterSendCatalogRow = {
   total_recipient_count: number
   send_candidate_count: number
   skipped_recipient_count: number
+  blocked_missing_translation_count: number
   tracked_link_count: number
 }
 

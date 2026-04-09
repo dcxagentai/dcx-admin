@@ -1,0 +1,5 @@
+The admin pages editor and newsletters editor now surface the multilingual model directly in the UI. Each editor shows existing translations as openable language chips, missing supported languages as create-translation actions, and automatically navigates into the newly created localized route after the backend creates that first translation row. This gives the client a concrete translation workflow to interact with even before any real translated content is authored.
+
+The newsletter editor also now shows a language-readiness card for prepared sends. It reports how many eligible recipients exist by language, how many are currently ready to receive the newsletter, and how many are blocked because that newsletter has not yet been translated into their preferred language. The prepare-send buttons are disabled while that missing-language condition exists, so the admin sees the problem before dispatch rather than discovering it later.
+
+The translation and readiness additions were kept path-based to match the rest of the admin surface. No new query-string route identity was introduced. The admin production build passed after the changes.

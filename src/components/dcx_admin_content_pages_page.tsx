@@ -19,6 +19,7 @@ import {
   type DcxAdminContentPageDetail,
 } from "../lib/read_dcx_admin_content_page_detail"
 import { createDcxAdminContentPageDraft } from "../lib/create_dcx_admin_content_page_draft"
+import { createDcxAdminContentPageTranslation } from "../lib/create_dcx_admin_content_page_translation"
 import { saveDcxAdminContentPageLiveRow } from "../lib/save_dcx_admin_content_page_live_row"
 import { publishDcxAdminContentPageLiveRow } from "../lib/publish_dcx_admin_content_page_live_row"
 import { archiveDcxAdminContentPageLiveRow } from "../lib/archive_dcx_admin_content_page_live_row"
@@ -242,6 +243,27 @@ export function DcxAdminContentPagesPage(props: Props) {
       ])
     },
   })
+  const createTranslationMutation = useMutation({
+    mutationFn: async (params: { targetLanguageCode: string }) =>
+      createDcxAdminContentPageTranslation({
+        apiBaseUrl: props.apiBaseUrl,
+        pageKey: props.routePageKey ?? "",
+        sourceLanguageCode: props.routeLanguageCode ?? "en",
+        targetLanguageCode: params.targetLanguageCode,
+      }),
+    onSuccess: async (payload) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dcx_admin_content_pages_catalog"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_content_page_detail", props.routeLanguageCode, props.routePageKey],
+        }),
+      ])
+      props.onOpenPage({
+        pageKey: payload.data.page_key,
+        languageCode: payload.data.language_code,
+      })
+    },
+  })
 
   const categories = categoriesQuery.data?.data.categories ?? []
   const pages = pagesCatalogQuery.data?.data.pages ?? []
@@ -301,7 +323,8 @@ export function DcxAdminContentPagesPage(props: Props) {
     createDraftMutation.isPending ||
     saveMutation.isPending ||
     publishMutation.isPending ||
-    archiveMutation.isPending
+    archiveMutation.isPending ||
+    createTranslationMutation.isPending
 
   useEffect(() => {
     if (!detail || !editorDraft || !isDirty || isAnyWritePending) {
@@ -496,6 +519,82 @@ export function DcxAdminContentPagesPage(props: Props) {
                 />
               </label>
             </div>
+
+            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Translations
+                </p>
+                <h4 className="text-lg font-semibold tracking-tight text-slate-950">
+                  Existing and missing language rows
+                </h4>
+                <p className="text-sm leading-6 text-slate-600">
+                  Pages are already wired to the same immutable original/translation model as the rest of the CMS. Create missing language rows here, then autosave will take over in that route.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {detail.translation_summary.existing_translations.map((translation) => (
+                  <button
+                    key={translation.language.language_code}
+                    type="button"
+                    onClick={() =>
+                      props.onOpenPage({
+                        pageKey: translation.page_key,
+                        languageCode: translation.language.language_code,
+                      })
+                    }
+                    className={[
+                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      translation.is_current_language
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
+                    ].join(" ")}
+                  >
+                    {translation.language.language_name_native}
+                    {translation.is_original ? " · original" : ""}
+                  </button>
+                ))}
+              </div>
+
+              {detail.translation_summary.missing_languages.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Missing languages
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {detail.translation_summary.missing_languages.map((language) => (
+                      <button
+                        key={language.language_code}
+                        type="button"
+                        onClick={() =>
+                          createTranslationMutation.mutate({
+                            targetLanguageCode: language.language_code,
+                          })
+                        }
+                        disabled={createTranslationMutation.isPending}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {createTranslationMutation.isPending
+                          ? "Creating..."
+                          : `Create ${language.language_name_native}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-emerald-700">
+                  This page already has live rows in every currently supported language.
+                </p>
+              )}
+
+              {createTranslationMutation.isError ? (
+                <p className="text-sm text-red-600">
+                  {(createTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                    (createTranslationMutation.error as Error).message}
+                </p>
+              ) : null}
+            </section>
 
             <label className="space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Title</span>

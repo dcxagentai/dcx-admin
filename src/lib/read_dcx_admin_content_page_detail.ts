@@ -32,6 +32,23 @@ export type DcxAdminContentPageDetail = {
     category_description: string
     category_slug: string
   }
+  translation_summary: {
+    original_page_id: number
+    original_language_code: string
+    existing_translations: Array<{
+      page_id: number
+      page_key: string
+      page_title: string
+      page_slug: string
+      publication_status: string
+      is_original: boolean
+      created_at_ts_ms: number
+      updated_at_ts_ms: number
+      is_current_language: boolean
+      language: DcxAdminContentPageCategoryRow["language"]
+    }>
+    missing_languages: DcxAdminContentPageCategoryRow["language"][]
+  }
 }
 
 type SuccessResponse = {

@@ -6,9 +6,44 @@
  */
 import type { DcxAdminNewsletterCatalogRow } from "./read_dcx_admin_newsletters_catalog"
 
+export type DcxAdminNewsletterDetail = DcxAdminNewsletterCatalogRow & {
+  translation_summary: {
+    original_email_id: number
+    original_language_code: string
+    existing_translations: Array<{
+      email_id: number
+      email_key: string
+      email_subject: string
+      is_original: boolean
+      created_at_ts_ms: number
+      updated_at_ts_ms: number
+      is_current_language: boolean
+      language: DcxAdminNewsletterCatalogRow["language"]
+    }>
+    missing_languages: DcxAdminNewsletterCatalogRow["language"][]
+  }
+  language_readiness: {
+    total_evaluated_recipient_count: number
+    total_send_candidate_count: number
+    total_blocked_missing_translation_count: number
+    language_rows: Array<{
+      language: DcxAdminNewsletterCatalogRow["language"]
+      eligible_recipient_count: number
+      send_candidate_count: number
+      blocked_missing_translation_count: number
+      has_live_translation: boolean
+    }>
+    missing_languages: Array<
+      DcxAdminNewsletterCatalogRow["language"] & {
+        blocked_missing_translation_count: number
+      }
+    >
+  }
+}
+
 type SuccessResponse = {
   ok: true
-  data: DcxAdminNewsletterCatalogRow
+  data: DcxAdminNewsletterDetail
 }
 
 type ErrorResponse = {

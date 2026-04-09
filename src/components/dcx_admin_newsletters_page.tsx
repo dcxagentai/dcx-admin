@@ -11,8 +11,12 @@ import {
   readDcxAdminNewslettersCatalog,
   type DcxAdminNewsletterCatalogRow,
 } from "../lib/read_dcx_admin_newsletters_catalog"
-import { readDcxAdminNewsletterDetail } from "../lib/read_dcx_admin_newsletter_detail"
+import {
+  readDcxAdminNewsletterDetail,
+  type DcxAdminNewsletterDetail,
+} from "../lib/read_dcx_admin_newsletter_detail"
 import { createDcxAdminNewsletterDraft } from "../lib/create_dcx_admin_newsletter_draft"
+import { createDcxAdminNewsletterTranslation } from "../lib/create_dcx_admin_newsletter_translation"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
 import {
   readDcxAdminNewsletterSendsCatalog,
@@ -74,7 +78,7 @@ function readVisualTextClass(state: EditorVisualState): string {
   return "text-sky-700"
 }
 
-function buildDetailSnapshot(detail: DcxAdminNewsletterCatalogRow): string {
+function buildDetailSnapshot(detail: DcxAdminNewsletterDetail): string {
   return JSON.stringify({
     email_subject: detail.email_subject,
     email_body: detail.email_body,
@@ -147,7 +151,11 @@ function NewsletterSendRow(props: {
         <p>{props.row.total_recipient_count} recipients</p>
         <p>{props.row.send_candidate_count} send candidates</p>
         <p>{props.row.skipped_recipient_count} skipped</p>
-        <p>{props.row.tracked_link_count} tracked links</p>
+        <p>
+          {props.row.blocked_missing_translation_count > 0
+            ? `${props.row.blocked_missing_translation_count} waiting translation`
+            : `${props.row.tracked_link_count} tracked links`}
+        </p>
       </div>
       {props.row.send_status === "scheduled" ? (
         <button
@@ -223,6 +231,30 @@ export function DcxAdminNewslettersPage(props: Props) {
       ])
     },
   })
+  const createTranslationMutation = useMutation({
+    mutationFn: async (params: { targetLanguageCode: string }) =>
+      createDcxAdminNewsletterTranslation({
+        apiBaseUrl: props.apiBaseUrl,
+        emailKey: props.routeEmailKey ?? "",
+        sourceLanguageCode: props.routeLanguageCode ?? "en",
+        targetLanguageCode: params.targetLanguageCode,
+      }),
+    onSuccess: async (payload) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dcx_admin_newsletters_catalog"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_newsletter_detail", props.routeLanguageCode, props.routeEmailKey],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
+        }),
+      ])
+      props.onOpenNewsletter({
+        emailKey: payload.data.email_key,
+        languageCode: payload.data.language_code,
+      })
+    },
+  })
   const prepareSendMutation = useMutation({
     mutationFn: async (params: { scheduledSendAtTsMs: number | null }) =>
       prepareDcxAdminNewsletterSend({
@@ -289,9 +321,15 @@ export function DcxAdminNewslettersPage(props: Props) {
       return
     }
     setScheduledSendInput(buildDateTimeLocalInputValue(Date.now() + 60 * 60 * 1000))
-    setSendStatusText(
-      "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
-    )
+    if ((detail.language_readiness.total_blocked_missing_translation_count ?? 0) > 0) {
+      setSendStatusText(
+        `This newsletter still needs translations before sending. ${detail.language_readiness.total_blocked_missing_translation_count} eligible recipients are currently blocked by missing language coverage.`,
+      )
+    } else {
+      setSendStatusText(
+        "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
+      )
+    }
   }, [detail?.email_id])
 
   useEffect(() => {
@@ -303,10 +341,17 @@ export function DcxAdminNewslettersPage(props: Props) {
 
   const draftSnapshot = editorDraft ? buildDraftSnapshot(editorDraft) : ""
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
-  const isAnyWritePending = createDraftMutation.isPending || saveMutation.isPending
+  const isAnyWritePending = createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
   const scheduledSendAtTsMs = readTimestampFromDateTimeLocalInput(scheduledSendInput)
   const isSendMutationPending = prepareSendMutation.isPending || cancelSendMutation.isPending
-  const canPrepareSend = detail !== null && !isDirty && !isAnyWritePending && !isSendMutationPending
+  const hasMissingNewsletterLanguagesForEligibleUsers =
+    (detail?.language_readiness.total_blocked_missing_translation_count ?? 0) > 0
+  const canPrepareSend =
+    detail !== null &&
+    !isDirty &&
+    !isAnyWritePending &&
+    !isSendMutationPending &&
+    !hasMissingNewsletterLanguagesForEligibleUsers
   const selectedNewsletterIds = useMemo(
     () => new Set(props.routeEmailKey ? [props.routeEmailKey] : []),
     [props.routeEmailKey],
@@ -516,6 +561,82 @@ export function DcxAdminNewslettersPage(props: Props) {
               />
             </label>
 
+            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Translations
+                </p>
+                <h4 className="text-lg font-semibold tracking-tight text-slate-950">
+                  Existing and missing language rows
+                </h4>
+                <p className="text-sm leading-6 text-slate-600">
+                  Newsletters follow the same original/translation model as transactional templates. Create missing language rows here before preparing real sends for users who prefer those languages.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {detail.translation_summary.existing_translations.map((translation) => (
+                  <button
+                    key={translation.language.language_code}
+                    type="button"
+                    onClick={() =>
+                      props.onOpenNewsletter({
+                        emailKey: translation.email_key,
+                        languageCode: translation.language.language_code,
+                      })
+                    }
+                    className={[
+                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      translation.is_current_language
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
+                    ].join(" ")}
+                  >
+                    {translation.language.language_name_native}
+                    {translation.is_original ? " · original" : ""}
+                  </button>
+                ))}
+              </div>
+
+              {detail.translation_summary.missing_languages.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Missing languages
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {detail.translation_summary.missing_languages.map((language) => (
+                      <button
+                        key={language.language_code}
+                        type="button"
+                        onClick={() =>
+                          createTranslationMutation.mutate({
+                            targetLanguageCode: language.language_code,
+                          })
+                        }
+                        disabled={createTranslationMutation.isPending}
+                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {createTranslationMutation.isPending
+                          ? "Creating..."
+                          : `Create ${language.language_name_native}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-emerald-700">
+                  This newsletter already has live rows in every currently supported language.
+                </p>
+              )}
+
+              {createTranslationMutation.isError ? (
+                <p className="text-sm text-red-600">
+                  {(createTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                    (createTranslationMutation.error as Error).message}
+                </p>
+              ) : null}
+            </section>
+
             <div className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
@@ -553,6 +674,58 @@ export function DcxAdminNewslettersPage(props: Props) {
               </div>
 
               <p className="text-sm leading-6 text-slate-600">{sendStatusText}</p>
+
+              <div className="rounded-[1.1rem] border border-black/6 bg-white px-4 py-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Language readiness
+                  </p>
+                  <p className="text-sm leading-6 text-slate-600">
+                    Newsletters only prepare send candidates when a live translation exists in the user’s preferred language. Transactional fallback-to-English does not apply here.
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+                  <p>{detail.language_readiness.total_evaluated_recipient_count} eligible recipients</p>
+                  <p>{detail.language_readiness.total_send_candidate_count} ready to send</p>
+                  <p>{detail.language_readiness.total_blocked_missing_translation_count} waiting translation</p>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {detail.language_readiness.language_rows.map((row) => (
+                    <div
+                      key={row.language.language_code}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-black/6 bg-slate-50 px-4 py-3 text-sm"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium text-slate-950">{row.language.language_name_native}</p>
+                        <p className="text-slate-600">
+                          {row.eligible_recipient_count} eligible · {row.send_candidate_count} ready
+                        </p>
+                      </div>
+                      <div
+                        className={[
+                          "rounded-full px-3 py-1 text-xs font-medium",
+                          row.has_live_translation
+                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border border-amber-200 bg-amber-50 text-amber-700",
+                        ].join(" ")}
+                      >
+                        {row.has_live_translation
+                          ? "translation ready"
+                          : `${row.blocked_missing_translation_count} blocked`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {detail.language_readiness.missing_languages.length > 0 ? (
+                  <div className="mt-4 rounded-[1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    This newsletter still needs live translations in{" "}
+                    {detail.language_readiness.missing_languages
+                      .map((language) => language.language_name_native)
+                      .join(", ")}{" "}
+                    before all eligible users can receive it in their preferred language.
+                  </div>
+                ) : null}
+              </div>
 
               <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
                 <input
