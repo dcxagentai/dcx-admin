@@ -58,7 +58,7 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
       items: [
         {
           id: "content_pages_group",
-          title: "Pages",
+          title: "Website",
           url: "/content/pages",
           isActive:
             currentPathname.startsWith("/content/pages") ||
