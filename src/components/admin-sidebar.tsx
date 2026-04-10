@@ -104,8 +104,6 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
             },
           ],
         },
-        {
-        },
       ],
     },
     {

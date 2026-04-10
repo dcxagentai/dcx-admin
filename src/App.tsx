@@ -23,6 +23,16 @@ import { readDcxAuthenticatedSession } from "./lib/read_dcx_authenticated_sessio
 
 const DCX_AUTH_LOGOUT_SYNC_STORAGE_KEY = "dcx_auth_logout_at_ts_ms"
 
+function buildDcxAdminLinkedAppAuthPath(pathname: "/login" | "/password/reset/request", languageCode: string): string {
+  const normalizedLanguageCode = ["en", "es", "fr", "de"].includes(languageCode) ? languageCode : "en"
+
+  if (pathname === "/login") {
+    return `/${normalizedLanguageCode}/t/login`
+  }
+
+  return `/${normalizedLanguageCode}/t/password/reset/request`
+}
+
 function redirectToLoginScreen(): void {
   if (window.location.pathname === "/login" && window.location.search === "") {
     return
@@ -589,24 +599,24 @@ function App() {
     queryClient,
   ])
 
-  if (authenticatedSessionQuery.isLoading && !authenticatedSessionSummary) {
+  if (authenticatedSessionQuery.isLoading && !authenticatedSessionSummary && window.location.pathname !== "/login") {
     return null
   }
 
   if (!authenticatedSessionSummary) {
+    const loginSurfaceErrorMessage = loginMutation.isError
+      ? (loginMutation.error as Error & { suggested_action?: string }).message
+      : null
+
     return (
       <DcxAdminAuthLoginPage
         isPending={loginMutation.isPending}
-        errorMessage={
-          loginMutation.isError
-            ? (loginMutation.error as Error & { suggested_action?: string }).message
-            : authenticatedSessionQuery.isError
-              ? (authenticatedSessionQuery.error as Error & { suggested_action?: string }).message
-              : null
-        }
+        errorMessage={loginSurfaceErrorMessage}
         onSubmit={(email, password) => loginMutation.mutate({ email, password })}
         onForgotPassword={() => {
-          window.location.assign(`${appBaseUrl.replace(/\/$/, "")}/password/reset/request`)
+          window.location.assign(
+            `${appBaseUrl.replace(/\/$/, "")}${buildDcxAdminLinkedAppAuthPath("/password/reset/request", "en")}`,
+          )
         }}
       />
     )
