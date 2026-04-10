@@ -20,10 +20,19 @@ import {
 } from "../lib/read_dcx_admin_content_page_detail"
 import { createDcxAdminContentPageDraft } from "../lib/create_dcx_admin_content_page_draft"
 import { createDcxAdminContentPageTranslation } from "../lib/create_dcx_admin_content_page_translation"
+import {
+  DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS,
+  readDcxAdminEditableFieldBorderClass,
+  readDcxAdminEditableFieldCompactStatusLabel,
+  readDcxAdminEditableFieldStatusTextClass,
+  type DcxAdminEditableFieldVisualState,
+} from "../lib/dcx_admin_editable_field_visuals"
 import { saveDcxAdminContentPageLiveRow } from "../lib/save_dcx_admin_content_page_live_row"
 import { publishDcxAdminContentPageLiveRow } from "../lib/publish_dcx_admin_content_page_live_row"
 import { archiveDcxAdminContentPageLiveRow } from "../lib/archive_dcx_admin_content_page_live_row"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   apiBaseUrl: string
@@ -32,8 +41,6 @@ type Props = {
   onOpenPage: (params: { pageKey: string; languageCode: string }) => void
 }
 
-type EditorVisualState = "idle" | "editing" | "saving" | "saved" | "error"
-
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
     return "Not set"
@@ -41,20 +48,6 @@ function formatTimestampLabel(timestampMs: number | null): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(timestampMs),
   )
-}
-
-function readVisualBorderClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "border-amber-300"
-  if (state === "saved") return "border-emerald-300"
-  if (state === "error") return "border-red-300"
-  return "border-sky-300"
-}
-
-function readVisualTextClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "text-amber-600"
-  if (state === "saved") return "text-emerald-600"
-  if (state === "error") return "text-red-600"
-  return "text-sky-700"
 }
 
 function buildDetailSnapshot(detail: DcxAdminContentPageDetail): string {
@@ -108,7 +101,7 @@ function PageRow(props: {
       type="button"
       onClick={props.onClick}
       className={[
-        "flex w-full flex-col gap-1 rounded-[1.25rem] border px-4 py-4 text-left transition",
+        "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
         props.isSelected
           ? "border-slate-900 bg-slate-900 text-white"
           : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
@@ -273,10 +266,7 @@ export function DcxAdminContentPagesPage(props: Props) {
   const [newPageCategoryKey, setNewPageCategoryKey] = useState("insights")
   const [editorDraft, setEditorDraft] = useState<DraftState | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
-  const [visualState, setVisualState] = useState<EditorVisualState>("idle")
-  const [statusText, setStatusText] = useState(
-    "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-  )
+  const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
 
   useEffect(() => {
     if (categories.length > 0 && !categories.some((row) => row.category_key === newPageCategoryKey)) {
@@ -289,9 +279,6 @@ export function DcxAdminContentPagesPage(props: Props) {
       setEditorDraft(null)
       setLastSavedSnapshot("")
       setVisualState("idle")
-      setStatusText(
-        "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-      )
       return
     }
 
@@ -309,9 +296,6 @@ export function DcxAdminContentPagesPage(props: Props) {
     setEditorDraft(nextDraft)
     setLastSavedSnapshot(buildDetailSnapshot(detail))
     setVisualState("idle")
-    setStatusText(
-      "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-    )
   }, [detail?.page_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
@@ -330,7 +314,7 @@ export function DcxAdminContentPagesPage(props: Props) {
     archiveMutation.isPending ||
     createTranslationMutation.isPending
 
-  async function persistCurrentDraft(saveLabel: string): Promise<void> {
+  async function persistCurrentDraft(): Promise<void> {
     if (!detail || !editorDraft || !isDirty) {
       return
     }
@@ -340,27 +324,18 @@ export function DcxAdminContentPagesPage(props: Props) {
     }
 
     setVisualState("saving")
-    setStatusText(saveLabel)
     try {
       await saveMutation.mutateAsync({
         pageId: detail.page_id,
         ...editorDraft,
       })
       setVisualState("saved")
-      setStatusText("Draft saved.")
       if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
       resetStateTimeoutRef.current = setTimeout(() => {
         setVisualState("idle")
-        setStatusText(
-          "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-        )
-      }, 1400)
+      }, DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS)
     } catch (error) {
       setVisualState("error")
-      setStatusText(
-        (error as Error & { suggested_action?: string }).suggested_action ??
-          "Save failed. Keep the tab open and retry after the backend is healthy.",
-      )
     }
   }
 
@@ -370,14 +345,13 @@ export function DcxAdminContentPagesPage(props: Props) {
     }
 
     setVisualState("editing")
-    setStatusText("Editing. Save now or wait for the 30 second autosave.")
 
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current)
     }
 
     autosaveTimeoutRef.current = setTimeout(() => {
-      void persistCurrentDraft("Saving draft...")
+      void persistCurrentDraft()
     }, 30000)
   }, [detail, editorDraft, isDirty, isAnyWritePending])
 
@@ -390,7 +364,7 @@ export function DcxAdminContentPagesPage(props: Props) {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
       <section className="space-y-6">
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Pages</h2>
@@ -399,14 +373,14 @@ export function DcxAdminContentPagesPage(props: Props) {
             </p>
           </div>
 
-          <div className="space-y-3 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+          <div className="space-y-3 border border-black/6 bg-slate-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               New page
             </p>
             <select
               value={newPageCategoryKey}
               onChange={(event) => setNewPageCategoryKey(event.target.value)}
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+              className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
             >
               {categories.map((category) => (
                 <option key={category.category_key} value={category.category_key}>
@@ -418,9 +392,9 @@ export function DcxAdminContentPagesPage(props: Props) {
               value={newPageTitle}
               onChange={(event) => setNewPageTitle(event.target.value)}
               placeholder="Page title"
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+              className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
             />
-            <button
+            <Button
               type="button"
               onClick={() =>
                 createDraftMutation.mutate({
@@ -430,10 +404,10 @@ export function DcxAdminContentPagesPage(props: Props) {
                 })
               }
               disabled={createDraftMutation.isPending || newPageTitle.trim() === ""}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
             >
               {createDraftMutation.isPending ? "Creating page..." : "New page"}
-            </button>
+            </Button>
             {createDraftMutation.isError ? (
               <p className="text-sm text-red-600">
                 {(createDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
@@ -443,7 +417,7 @@ export function DcxAdminContentPagesPage(props: Props) {
           </div>
         </article>
 
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -485,7 +459,7 @@ export function DcxAdminContentPagesPage(props: Props) {
         </article>
       </section>
 
-      <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
@@ -494,8 +468,8 @@ export function DcxAdminContentPagesPage(props: Props) {
             </h3>
           </div>
           {detail ? (
-            <p className={["text-xs font-medium", readVisualTextClass(visualState)].join(" ")}>
-              {statusText}
+            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
             </p>
           ) : null}
         </div>
@@ -519,7 +493,7 @@ export function DcxAdminContentPagesPage(props: Props) {
                 <select
                   value={editorDraft.category_key}
                   onChange={(event) => updateDraft({ category_key: event.target.value })}
-                  className={["h-11 w-full rounded-2xl border bg-slate-50 px-4 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                  className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 >
                   {categories.map((category) => (
                     <option key={category.category_key} value={category.category_key}>
@@ -533,12 +507,12 @@ export function DcxAdminContentPagesPage(props: Props) {
                 <input
                   value={editorDraft.page_slug}
                   onChange={(event) => updateDraft({ page_slug: event.target.value })}
-                  className={["h-11 w-full rounded-2xl border bg-slate-50 px-4 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                  className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 />
               </label>
             </div>
 
-            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Translations
@@ -563,7 +537,7 @@ export function DcxAdminContentPagesPage(props: Props) {
                       })
                     }
                     className={[
-                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      "border px-4 py-2 text-sm font-medium transition",
                       translation.is_current_language
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
@@ -582,7 +556,7 @@ export function DcxAdminContentPagesPage(props: Props) {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {detail.translation_summary.missing_languages.map((language) => (
-                      <button
+                      <Button
                         key={language.language_code}
                         type="button"
                         onClick={() =>
@@ -591,12 +565,13 @@ export function DcxAdminContentPagesPage(props: Props) {
                           })
                         }
                         disabled={createTranslationMutation.isPending}
-                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        variant="outline"
+                        className="rounded-none border-slate-200 bg-white px-4 py-2 text-slate-700 hover:border-slate-300 hover:text-slate-950"
                       >
                         {createTranslationMutation.isPending
                           ? "Creating..."
                           : `Create ${language.language_name_native}`}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -615,38 +590,40 @@ export function DcxAdminContentPagesPage(props: Props) {
             </section>
 
             <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Title</span>
+              <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                Title · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+              </span>
               <input
                 value={editorDraft.page_title}
                 onChange={(event) => updateDraft({ page_title: event.target.value })}
-                className={["h-12 w-full rounded-2xl border bg-slate-50 px-4 text-base outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
             <label className="space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Lede</span>
-              <textarea
+              <Textarea
                 value={editorDraft.page_lede}
                 onChange={(event) => updateDraft({ page_lede: event.target.value })}
                 rows={3}
-                className={["w-full resize-y rounded-[1.1rem] border bg-slate-50 px-4 py-3 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
             <div className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
-                <textarea
+                <Textarea
                   value={editorDraft.page_body_markdown}
                   onChange={(event) => updateDraft({ page_body_markdown: event.target.value })}
                   rows={18}
-                  className={["min-h-[28rem] w-full resize-y rounded-[1.1rem] border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readVisualBorderClass(visualState)].join(" ")}
+                  className={["min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 />
               </label>
               <div className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
                 <div
-                  className="prose prose-slate min-h-[28rem] max-w-none rounded-[1.1rem] border border-black/6 bg-slate-50 px-5 py-5"
+                  className="prose prose-slate min-h-[28rem] max-w-none border border-black/6 bg-slate-50 px-5 py-5"
                   dangerouslySetInnerHTML={{
                     __html: renderDcxBasicMarkdownToHtml(editorDraft.page_body_markdown),
                   }}
@@ -660,45 +637,47 @@ export function DcxAdminContentPagesPage(props: Props) {
                 <input
                   value={editorDraft.meta_title}
                   onChange={(event) => updateDraft({ meta_title: event.target.value })}
-                  className={["h-11 w-full rounded-2xl border bg-slate-50 px-4 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 />
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Meta description</span>
-                <textarea
+                <Textarea
                   value={editorDraft.meta_description}
                   onChange={(event) => updateDraft({ meta_description: event.target.value })}
                   rows={3}
-                  className={["w-full resize-y rounded-[1.1rem] border bg-slate-50 px-4 py-3 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 />
               </label>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button
+              <Button
                 type="button"
-                onClick={() => void persistCurrentDraft("Saving draft...")}
+                onClick={() => void persistCurrentDraft()}
                 disabled={!isDirty || isAnyWritePending}
-                className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                variant="outline"
+                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
               >
                 {saveMutation.isPending ? "Saving..." : "Save page"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => publishMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
                 disabled={isAnyWritePending}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
               >
                 {publishMutation.isPending ? "Publishing..." : "Publish"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => archiveMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
                 disabled={isAnyWritePending}
-                className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50 px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                variant="outline"
+                className="rounded-none border-slate-200 bg-slate-50 px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
               >
                 {archiveMutation.isPending ? "Archiving..." : "Archive"}
-              </button>
+              </Button>
             </div>
 
             {publishMutation.isError ? (

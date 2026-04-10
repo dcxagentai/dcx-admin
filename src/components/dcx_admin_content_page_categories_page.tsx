@@ -14,7 +14,16 @@ import {
 } from "../lib/read_dcx_admin_content_page_category_detail"
 import { createDcxAdminContentPageCategoryDraft } from "../lib/create_dcx_admin_content_page_category_draft"
 import { createDcxAdminContentPageCategoryTranslation } from "../lib/create_dcx_admin_content_page_category_translation"
+import {
+  DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS,
+  readDcxAdminEditableFieldBorderClass,
+  readDcxAdminEditableFieldCompactStatusLabel,
+  readDcxAdminEditableFieldStatusTextClass,
+  type DcxAdminEditableFieldVisualState,
+} from "../lib/dcx_admin_editable_field_visuals"
 import { saveDcxAdminContentPageCategoryLiveRow } from "../lib/save_dcx_admin_content_page_category_live_row"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   apiBaseUrl: string
@@ -22,8 +31,6 @@ type Props = {
   routeLanguageCode: string | null
   onOpenCategory: (params: { categoryKey: string; languageCode: string }) => void
 }
-
-type EditorVisualState = "idle" | "editing" | "saving" | "saved" | "error"
 
 type DraftState = {
   category_name: string
@@ -36,20 +43,6 @@ function formatTimestampLabel(timestampMs: number | null): string {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(timestampMs),
   )
-}
-
-function readVisualBorderClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "border-amber-300"
-  if (state === "saved") return "border-emerald-300"
-  if (state === "error") return "border-red-300"
-  return "border-sky-300"
-}
-
-function readVisualTextClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "text-amber-600"
-  if (state === "saved") return "text-emerald-600"
-  if (state === "error") return "text-red-600"
-  return "text-sky-700"
 }
 
 function buildDetailSnapshot(detail: DcxAdminContentPageCategoryDetail): string {
@@ -176,19 +169,13 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
   const [newCategoryName, setNewCategoryName] = useState("")
   const [editorDraft, setEditorDraft] = useState<DraftState | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
-  const [visualState, setVisualState] = useState<EditorVisualState>("idle")
-  const [statusText, setStatusText] = useState(
-    "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-  )
+  const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
 
   useEffect(() => {
     if (!detail) {
       setEditorDraft(null)
       setLastSavedSnapshot("")
       setVisualState("idle")
-      setStatusText(
-        "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-      )
       return
     }
     const nextDraft = {
@@ -199,9 +186,6 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
     setEditorDraft(nextDraft)
     setLastSavedSnapshot(buildDetailSnapshot(detail))
     setVisualState("idle")
-    setStatusText(
-      "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-    )
   }, [detail?.category_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
@@ -223,31 +207,21 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
       autosaveTimeoutRef.current = null
     }
     setVisualState("saving")
-    setStatusText("Saving category...")
     try {
       await saveMutation.mutateAsync({ categoryId: detail.category_id, ...editorDraft })
       setVisualState("saved")
-      setStatusText("Category saved.")
       if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
       resetStateTimeoutRef.current = setTimeout(() => {
         setVisualState("idle")
-        setStatusText(
-          "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-        )
-      }, 1400)
+      }, DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS)
     } catch (error) {
       setVisualState("error")
-      setStatusText(
-        (error as Error & { suggested_action?: string }).suggested_action ??
-          "Save failed. Keep the tab open and retry after the backend is healthy.",
-      )
     }
   }
 
   useEffect(() => {
     if (!detail || !editorDraft || !isDirty || isAnyWritePending) return
     setVisualState("editing")
-    setStatusText("Editing. Save now or wait for the 30 second autosave.")
     if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
     autosaveTimeoutRef.current = setTimeout(() => {
       void persistCurrentDraft()
@@ -266,7 +240,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
       <section className="space-y-6">
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Page categories</h2>
@@ -275,7 +249,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
             </p>
           </div>
 
-          <div className="space-y-3 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+          <div className="space-y-3 border border-black/6 bg-slate-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               New category
             </p>
@@ -283,9 +257,9 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               value={newCategoryName}
               onChange={(event) => setNewCategoryName(event.target.value)}
               placeholder="Category name"
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+              className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
             />
-            <button
+            <Button
               type="button"
               onClick={() =>
                 createDraftMutation.mutate({
@@ -294,10 +268,10 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
                 })
               }
               disabled={createDraftMutation.isPending || newCategoryName.trim() === ""}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
             >
               {createDraftMutation.isPending ? "Creating category..." : "New category"}
-            </button>
+            </Button>
             {createDraftMutation.isError ? (
               <p className="text-sm text-red-600">
                 {(createDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
@@ -307,7 +281,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
           </div>
         </article>
 
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog</p>
@@ -331,8 +305,8 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
                     languageCode: category.language.language_code,
                   })
                 }}
-                className={[
-                  "flex w-full flex-col gap-1 rounded-[1.25rem] border px-4 py-4 text-left transition",
+              className={[
+                "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
                   selectedCategoryKeys.has(category.category_key)
                     ? "border-slate-900 bg-slate-900 text-white"
                     : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
@@ -354,7 +328,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
         </article>
       </section>
 
-      <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
@@ -363,8 +337,8 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
             </h3>
           </div>
           {detail ? (
-            <p className={["text-xs font-medium", readVisualTextClass(visualState)].join(" ")}>
-              {statusText}
+            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
             </p>
           ) : null}
         </div>
@@ -382,7 +356,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
 
         {detail && editorDraft ? (
           <div className="space-y-6">
-            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Translations
@@ -405,7 +379,7 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
                       })
                     }}
                     className={[
-                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      "border px-4 py-2 text-sm font-medium transition",
                       translation.is_current_language
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
@@ -423,15 +397,16 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {detail.translation_summary.missing_languages.map((language) => (
-                      <button
+                      <Button
                         key={language.language_code}
                         type="button"
                         onClick={() => createTranslationMutation.mutate({ targetLanguageCode: language.language_code })}
                         disabled={createTranslationMutation.isPending}
-                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        variant="outline"
+                        className="rounded-none border-slate-200 bg-white px-4 py-2 text-slate-700 hover:border-slate-300 hover:text-slate-950"
                       >
                         {createTranslationMutation.isPending ? "Creating..." : `Create ${language.language_name_native}`}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -439,21 +414,23 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
             </section>
 
             <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Category name</span>
+                <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                  Category name · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+                </span>
               <input
                 value={editorDraft.category_name}
                 onChange={(event) => updateDraft({ category_name: event.target.value })}
-                className={["h-12 w-full rounded-2xl border bg-slate-50 px-4 text-base outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
             <label className="space-y-2">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Description</span>
-              <textarea
+              <Textarea
                 value={editorDraft.category_description}
                 onChange={(event) => updateDraft({ category_description: event.target.value })}
                 rows={4}
-                className={["w-full resize-y rounded-[1.1rem] border bg-slate-50 px-4 py-3 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
@@ -462,19 +439,19 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               <input
                 value={editorDraft.category_slug}
                 onChange={(event) => updateDraft({ category_slug: event.target.value })}
-                className={["h-11 w-full rounded-2xl border bg-slate-50 px-4 text-sm outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
             <div className="flex flex-wrap gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => void persistCurrentDraft()}
                 disabled={!isDirty || isAnyWritePending}
-                className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
               >
                 {saveMutation.isPending ? "Saving..." : "Save category"}
-              </button>
+              </Button>
             </div>
 
             {saveMutation.isError ? (

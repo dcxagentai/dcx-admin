@@ -163,7 +163,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
 
   return (
     <section className="flex flex-col gap-6">
-      <section className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -180,7 +180,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
           </div>
           <div
             className={[
-              "rounded-full border px-3 py-1 text-xs font-medium",
+              "border px-3 py-1 text-xs font-medium",
               readPublishHealthClasses(publishHealthTone),
             ].join(" ")}
           >
@@ -211,7 +211,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
 
         {publishStatus ? (
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <article className="rounded-[1.5rem] border border-black/6 bg-slate-50 px-5 py-5">
+            <article className="border border-black/6 bg-slate-50 px-5 py-5">
               <div className="mb-4 space-y-2 border-b border-black/6 pb-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Health
@@ -251,7 +251,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
               </dl>
             </article>
 
-            <article className="rounded-[1.5rem] border border-black/6 bg-[#111111] px-5 py-5 text-white">
+            <article className="border border-black/6 bg-[#111111] px-5 py-5 text-white">
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
                   Action
@@ -268,7 +268,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                   type="button"
                   onClick={() => publishMutation.mutate()}
                   disabled={publishMutation.isPending || markLocalCompleteMutation.isPending}
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-white px-5 text-sm font-medium text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 items-center justify-center bg-white px-5 text-sm font-medium text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {publishMutation.isPending ? "Triggering publish..." : "Publish public site"}
                 </button>
@@ -278,7 +278,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                     type="button"
                     onClick={() => markLocalCompleteMutation.mutate()}
                     disabled={publishMutation.isPending || markLocalCompleteMutation.isPending}
-                    className="inline-flex h-11 items-center justify-center rounded-full border border-white/20 bg-transparent px-5 text-sm font-medium text-white transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-11 items-center justify-center border border-white/20 bg-transparent px-5 text-sm font-medium text-white transition hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {markLocalCompleteMutation.isPending
                       ? "Recording local rebuild..."
@@ -326,7 +326,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
       </section>
 
       {publishStatus ? (
-        <section className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -340,7 +340,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
                 last accepted publish trigger.
               </p>
             </div>
-            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+            <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
               {publishStatus.pending_change_count} pending
             </div>
           </div>

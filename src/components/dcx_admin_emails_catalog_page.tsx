@@ -50,7 +50,7 @@ function LabeledSelect(props: {
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-slate-300"
+        className="h-11 border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-slate-300"
       >
         {props.options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -124,7 +124,7 @@ function CatalogEmailCard(props: {
   const editableSurfaceRef = useRef<HTMLDivElement | null>(null)
 
   return (
-    <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
       <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
           {props.eyebrow}
@@ -153,7 +153,7 @@ function CatalogEmailCard(props: {
 
             {props.editable ? (
               <>
-                <div className="rounded-[1.25rem] border border-black/6 bg-slate-50 px-5 py-4">
+                <div className="border border-black/6 bg-slate-50 px-5 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Subject
                   </p>
@@ -176,13 +176,13 @@ function CatalogEmailCard(props: {
                     disabled={props.isDisabled}
                     rows={2}
                     className={[
-                      "mt-3 w-full resize-y rounded-[1.1rem] border bg-white px-4 py-3 text-base leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
+                      "mt-3 w-full resize-y border bg-white px-4 py-3 text-base leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
                       readEditableFieldBorderClass(props.visualState ?? "idle"),
                     ].join(" ")}
                   />
                 </div>
 
-                <div className="rounded-[1.25rem] border border-black/6 bg-slate-50 px-5 py-5">
+                <div className="border border-black/6 bg-slate-50 px-5 py-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Body
                   </p>
@@ -205,7 +205,7 @@ function CatalogEmailCard(props: {
                     disabled={props.isDisabled}
                     rows={12}
                     className={[
-                      "mt-3 w-full resize-y rounded-[1.1rem] border bg-white px-4 py-4 text-sm leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
+                      "mt-3 w-full resize-y border bg-white px-4 py-4 text-sm leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
                       readEditableFieldBorderClass(props.visualState ?? "idle"),
                     ].join(" ")}
                   />
@@ -213,14 +213,14 @@ function CatalogEmailCard(props: {
               </>
             ) : (
               <>
-                <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-4">
+                <div className="border border-slate-200 bg-slate-50 px-5 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Subject
                   </p>
                   <p className="mt-3 text-base leading-7 text-slate-900">{props.row.email_subject}</p>
                 </div>
 
-                <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-5">
+                <div className="border border-slate-200 bg-slate-50 px-5 py-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Body
                   </p>
@@ -433,7 +433,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
 
   return (
     <section className="flex flex-col gap-6">
-      <section className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -448,7 +448,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
               email-template model.
             </p>
           </div>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+          <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
             {totalLiveRowCount} live rows
           </div>
         </div>

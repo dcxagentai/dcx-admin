@@ -1,14 +1,11 @@
 /**
  * CONTEXT:
  * Root app composition for the DCX admin internal workspace.
- * It now projects the first internal surfaces into stable path-based routes so clients and
- * internal users can think in terms of `/users`, `/translations/ux`, and `/translations/emails`
- * while the shared session bootstrap decides whether this browser may enter the protected
- * admin workspace at all cleanly.
+ * It now projects the protected admin routes into the same shadcn sidebar-shell pattern
+ * already proven on the app surface, while preserving the existing auth and content plumbing.
  */
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
 
 import { DcxAdminAuthLoginPage } from "./components/dcx_admin_auth_login_page"
 import { DcxAdminContentPageCategoriesPage } from "./components/dcx_admin_content_page_categories_page"
@@ -16,8 +13,10 @@ import { DcxAdminContentPagesPage } from "./components/dcx_admin_content_pages_p
 import { DcxAdminEmailsCatalogPage } from "./components/dcx_admin_emails_catalog_page"
 import { DcxAdminNewslettersPage } from "./components/dcx_admin_newsletters_page"
 import { DcxAdminPublicSitePublishPage } from "./components/dcx_admin_public_site_publish_page"
+import { DcxAdminShell } from "./components/dcx_admin_shell"
 import { DcxAdminUsersListPage } from "./components/dcx_admin_users_list_page"
 import { DcxAdminUxStringsCatalogPage } from "./components/dcx_admin_ux_strings_catalog_page"
+import { DcxAdminWorkspacePlaceholderPage } from "./components/dcx_admin_workspace_placeholder_page"
 import { loginDcxUserWithEmailAndPassword } from "./lib/login_dcx_user_with_email_and_password"
 import { logoutAuthenticatedDcxUser } from "./lib/logout_authenticated_dcx_user"
 import { readDcxAuthenticatedSession } from "./lib/read_dcx_authenticated_session"
@@ -34,17 +33,21 @@ function redirectToLoginScreen(): void {
 
 type DcxAdminScreen =
   | "users"
+  | "schedule"
   | "content_page_categories"
   | "ux_strings"
   | "emails"
   | "content_pages"
   | "newsletters"
+  | "email_sequences"
+  | "content_public"
+  | "content_app"
+  | "content_admin"
   | "publish_public_site"
 
 type DcxAdminRouteState = {
   activeScreen: DcxAdminScreen
   pathname: string
-  routeChipLabel: string
   initialEmailType: string | null
   routeLanguageCode: string | null
   routeCategoryKey: string | null
@@ -53,11 +56,22 @@ type DcxAdminRouteState = {
 }
 
 function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteState {
+  if (pathname === "/schedule") {
+    return {
+      activeScreen: "schedule",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
   if (pathname === "/content/page-categories") {
     return {
       activeScreen: "content_page_categories",
       pathname,
-      routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -75,7 +89,6 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       return {
         activeScreen: "content_page_categories",
         pathname,
-        routeChipLabel: pathname,
         initialEmailType: null,
         routeLanguageCode: decodeURIComponent(categorySegments[0]),
         routeCategoryKey: decodeURIComponent(categorySegments.slice(1).join("/")),
@@ -89,7 +102,6 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     return {
       activeScreen: "content_pages",
       pathname,
-      routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -104,7 +116,6 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       return {
         activeScreen: "content_pages",
         pathname,
-        routeChipLabel: pathname,
         initialEmailType: null,
         routeLanguageCode: decodeURIComponent(pageSegments[0]),
         routeCategoryKey: null,
@@ -114,11 +125,10 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
-  if (pathname === "/content/newsletters") {
+  if (pathname === "/content/newsletters" || pathname === "/content/emails/newsletters") {
     return {
       activeScreen: "newsletters",
       pathname,
-      routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -127,16 +137,18 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
-  if (pathname.startsWith("/content/newsletters/")) {
-    const newsletterSegments = pathname
-      .replace("/content/newsletters/", "")
-      .split("/")
-      .filter(Boolean)
+  if (
+    pathname.startsWith("/content/newsletters/") ||
+    pathname.startsWith("/content/emails/newsletters/")
+  ) {
+    const routePrefix = pathname.startsWith("/content/emails/newsletters/")
+      ? "/content/emails/newsletters/"
+      : "/content/newsletters/"
+    const newsletterSegments = pathname.replace(routePrefix, "").split("/").filter(Boolean)
     if (newsletterSegments.length >= 2) {
       return {
         activeScreen: "newsletters",
         pathname,
-        routeChipLabel: pathname,
         initialEmailType: null,
         routeLanguageCode: decodeURIComponent(newsletterSegments[0]),
         routeCategoryKey: null,
@@ -150,7 +162,54 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     return {
       activeScreen: "ux_strings",
       pathname,
-      routeChipLabel: pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/ux") {
+    return {
+      activeScreen: "ux_strings",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/ux/public") {
+    return {
+      activeScreen: "content_public",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/ux/app") {
+    return {
+      activeScreen: "content_app",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/ux/admin") {
+    return {
+      activeScreen: "content_admin",
+      pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -163,7 +222,30 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     return {
       activeScreen: "emails",
       pathname,
-      routeChipLabel: pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/emails/transactional") {
+    return {
+      activeScreen: "emails",
+      pathname,
+      initialEmailType: "transactional",
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/emails/sequences") {
+    return {
+      activeScreen: "email_sequences",
+      pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -177,8 +259,55 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     return {
       activeScreen: "emails",
       pathname,
-      routeChipLabel: pathname,
       initialEmailType: emailType === "" ? null : decodeURIComponent(emailType),
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/public") {
+    return {
+      activeScreen: "content_public",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/app") {
+    return {
+      activeScreen: "content_app",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/content/admin") {
+    return {
+      activeScreen: "content_admin",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/publish") {
+    return {
+      activeScreen: "publish_public_site",
+      pathname,
+      initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
@@ -190,7 +319,6 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     return {
       activeScreen: "publish_public_site",
       pathname,
-      routeChipLabel: pathname,
       initialEmailType: null,
       routeLanguageCode: null,
       routeCategoryKey: null,
@@ -202,7 +330,6 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
   return {
     activeScreen: "users",
     pathname: "/users",
-    routeChipLabel: "/users",
     initialEmailType: null,
     routeLanguageCode: null,
     routeCategoryKey: null,
@@ -211,40 +338,20 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
   }
 }
 
-function buildPathnameForScreen(screen: DcxAdminScreen): string {
-  if (screen === "content_page_categories") {
-    return "/content/page-categories"
-  }
-
-  if (screen === "content_pages") {
-    return "/content/pages"
-  }
-
-  if (screen === "newsletters") {
-    return "/content/newsletters"
-  }
-
-  if (screen === "ux_strings") {
-    return "/translations/ux"
-  }
-
-  if (screen === "emails") {
-    return "/translations/emails"
-  }
-
-  if (screen === "publish_public_site") {
-    return "/publish/public-site"
-  }
-
-  return "/users"
-}
-
 function buildPathnameForEmailType(emailType: string | null): string {
-  if (!emailType) {
-    return "/translations/emails"
+  if (!emailType || emailType === "transactional") {
+    return "/content/emails/transactional"
   }
 
-  return `/translations/emails/${encodeURIComponent(emailType)}`
+  if (emailType === "newsletter") {
+    return "/content/emails/newsletters"
+  }
+
+  if (emailType === "sequence") {
+    return "/content/emails/sequences"
+  }
+
+  return `/content/emails/${encodeURIComponent(emailType)}`
 }
 
 function buildPathnameForContentPageCategory(params: { languageCode: string; categoryKey: string }): string {
@@ -256,7 +363,7 @@ function buildPathnameForContentPage(params: { languageCode: string; pageKey: st
 }
 
 function buildPathnameForNewsletter(params: { languageCode: string; emailKey: string }): string {
-  return `/content/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
+  return `/content/emails/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
 }
 
 function readDcxAdminApiBaseUrl(): string {
@@ -271,25 +378,52 @@ function readDcxAdminApiBaseUrl(): string {
   return "http://localhost:8000"
 }
 
-function DcxAdminWorkspaceTabButton(props: {
-  label: string
-  isActive: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={[
-        "rounded-full border px-4 py-2 text-sm font-medium transition",
-        props.isActive
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:text-slate-900",
-      ].join(" ")}
-    >
-      {props.label}
-    </button>
-  )
+function readDcxAdminScreenTitle(activeScreen: DcxAdminScreen): string {
+  if (activeScreen === "content_page_categories") {
+    return "Categories"
+  }
+
+  if (activeScreen === "schedule") {
+    return "Schedule"
+  }
+
+  if (activeScreen === "content_pages") {
+    return "Pages"
+  }
+
+  if (activeScreen === "newsletters") {
+    return "Newsletters"
+  }
+
+  if (activeScreen === "ux_strings") {
+    return "UX"
+  }
+
+  if (activeScreen === "emails") {
+    return "Transactional"
+  }
+
+  if (activeScreen === "email_sequences") {
+    return "Sequences"
+  }
+
+  if (activeScreen === "content_public") {
+    return "Public UX"
+  }
+
+  if (activeScreen === "content_app") {
+    return "App UX"
+  }
+
+  if (activeScreen === "content_admin") {
+    return "Admin UX"
+  }
+
+  if (activeScreen === "publish_public_site") {
+    return "Publish"
+  }
+
+  return "Users"
 }
 
 function App() {
@@ -456,13 +590,7 @@ function App() {
   ])
 
   if (authenticatedSessionQuery.isLoading && !authenticatedSessionSummary) {
-    return (
-      <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
-        <section className="mx-auto max-w-4xl rounded-[1.75rem] border border-black/6 bg-white px-6 py-8 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-          <p className="text-sm text-slate-500">Checking DCX admin session...</p>
-        </section>
-      </main>
-    )
+    return null
   }
 
   if (!authenticatedSessionSummary) {
@@ -490,7 +618,7 @@ function App() {
   ) {
     return (
       <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
-        <section className="mx-auto max-w-5xl rounded-[1.75rem] border border-black/6 bg-white px-6 py-8 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <section className="mx-auto max-w-5xl border border-black/6 bg-white px-6 py-8 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-red-500">
               Admin access blocked
@@ -506,7 +634,7 @@ function App() {
               <button
                 type="button"
                 onClick={() => logoutMutation.mutate()}
-                className="rounded-full border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+                className="border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
               >
                 {logoutMutation.isPending ? "Signing out..." : "Logout"}
               </button>
@@ -518,142 +646,129 @@ function App() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f6f8] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
-      <section className="mx-auto flex max-w-7xl flex-col gap-6">
-        <header className="flex flex-col gap-4 rounded-[1.75rem] border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)] sm:px-7">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <img src={dcxLogo} alt="DCX logo" className="h-11 w-11 rounded-xl bg-[#fbfaf7] p-1.5" />
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  DCX Admin
-                </p>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  Internal workspace
-                </h1>
-              </div>
-            </div>
+    <DcxAdminShell
+      title={readDcxAdminScreenTitle(activeScreen)}
+      currentPathname={routeState.pathname}
+      userEmail={authenticatedSessionSummary.primary_email}
+      userRole={authenticatedSessionSummary.user_role}
+      appHref={appBaseUrl}
+      onNavigateWithinAdmin={navigateToPathname}
+      onLogout={() => logoutMutation.mutate()}
+      isLogoutPending={logoutMutation.isPending}
+    >
+      {activeScreen === "users" ? (
+        <DcxAdminUsersListPage
+          apiBaseUrl={apiBaseUrl}
+        />
+      ) : null}
 
-            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              {routeState.routeChipLabel}
-            </div>
-          </div>
+      {activeScreen === "schedule" ? (
+        <DcxAdminWorkspacePlaceholderPage
+          eyebrow="Schedule"
+          title="Queued publishing and send timing"
+          description="This section will own scheduled newsletter dispatches, later page publishing windows, and other date-based operations that need clear internal control."
+          currentShapeTitle="Planned admin mechanics"
+          currentShapeItems={[
+            "Review scheduled newsletter sends before they leave the system.",
+            "Cancel or reschedule queued operations without editing the content itself.",
+            "Extend the same model later to future timed page publishing workflows.",
+          ]}
+        />
+      ) : null}
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-            {authenticatedSessionSummary ? (
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-                {authenticatedSessionSummary.primary_email} · {authenticatedSessionSummary.user_role}
-              </span>
-            ) : null}
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
-              Path-based admin routes now active
-            </span>
-            {authenticatedSessionSummary ? (
-              <button
-                type="button"
-                onClick={() => logoutMutation.mutate()}
-                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm transition hover:border-slate-300 hover:text-slate-950"
-              >
-                {logoutMutation.isPending ? "Signing out..." : "Logout"}
-              </button>
-            ) : null}
-          </div>
+      {activeScreen === "content_page_categories" ? (
+        <DcxAdminContentPageCategoriesPage
+          apiBaseUrl={apiBaseUrl}
+          routeLanguageCode={routeLanguageCode}
+          routeCategoryKey={routeCategoryKey}
+          onOpenCategory={(params) => navigateToPathname(buildPathnameForContentPageCategory(params))}
+        />
+      ) : null}
 
-          <div className="flex flex-wrap gap-3 border-t border-black/6 pt-4">
-            <DcxAdminWorkspaceTabButton
-              label="Users"
-              isActive={activeScreen === "users"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("users"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="Categories"
-              isActive={activeScreen === "content_page_categories"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("content_page_categories"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="Pages"
-              isActive={activeScreen === "content_pages"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("content_pages"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="Newsletters"
-              isActive={activeScreen === "newsletters"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("newsletters"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="UX Strings"
-              isActive={activeScreen === "ux_strings"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("ux_strings"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="Emails"
-              isActive={activeScreen === "emails"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("emails"))}
-            />
-            <DcxAdminWorkspaceTabButton
-              label="Publish"
-              isActive={activeScreen === "publish_public_site"}
-              onClick={() => navigateToPathname(buildPathnameForScreen("publish_public_site"))}
-            />
-          </div>
-        </header>
+      {activeScreen === "ux_strings" ? (
+        <DcxAdminUxStringsCatalogPage
+          apiBaseUrl={apiBaseUrl}
+        />
+      ) : null}
 
-        {activeScreen === "users" ? (
-          <DcxAdminUsersListPage
-            apiBaseUrl={apiBaseUrl}
-          />
-        ) : null}
+      {activeScreen === "content_pages" ? (
+        <DcxAdminContentPagesPage
+          apiBaseUrl={apiBaseUrl}
+          routeLanguageCode={routeLanguageCode}
+          routePageKey={routePageKey}
+          onOpenPage={(params) => navigateToPathname(buildPathnameForContentPage(params))}
+        />
+      ) : null}
 
-        {activeScreen === "content_page_categories" ? (
-          <DcxAdminContentPageCategoriesPage
-            apiBaseUrl={apiBaseUrl}
-            routeLanguageCode={routeLanguageCode}
-            routeCategoryKey={routeCategoryKey}
-            onOpenCategory={(params) => navigateToPathname(buildPathnameForContentPageCategory(params))}
-          />
-        ) : null}
+      {activeScreen === "emails" ? (
+        <DcxAdminEmailsCatalogPage
+          apiBaseUrl={apiBaseUrl}
+          initialEmailType={initialEmailType}
+          onEmailTypeRouteChange={(nextEmailType) =>
+            navigateToPathname(buildPathnameForEmailType(nextEmailType))
+          }
+        />
+      ) : null}
 
-        {activeScreen === "ux_strings" ? (
-          <DcxAdminUxStringsCatalogPage
-            apiBaseUrl={apiBaseUrl}
-          />
-        ) : null}
+      {activeScreen === "newsletters" ? (
+        <DcxAdminNewslettersPage
+          apiBaseUrl={apiBaseUrl}
+          routeLanguageCode={routeLanguageCode}
+          routeEmailKey={routeNewsletterKey}
+          onOpenNewsletter={(params) => navigateToPathname(buildPathnameForNewsletter(params))}
+        />
+      ) : null}
 
-        {activeScreen === "content_pages" ? (
-          <DcxAdminContentPagesPage
-            apiBaseUrl={apiBaseUrl}
-            routeLanguageCode={routeLanguageCode}
-            routePageKey={routePageKey}
-            onOpenPage={(params) => navigateToPathname(buildPathnameForContentPage(params))}
-          />
-        ) : null}
+      {activeScreen === "email_sequences" ? (
+        <DcxAdminWorkspacePlaceholderPage
+          eyebrow="Content / Emails"
+          title="Reusable email sequences"
+          description="This route is reserved for future onboarding, nurture, and operational email sequences that should be composed once and sent in a controlled order."
+          currentShapeTitle="Planned sequence controls"
+          currentShapeItems={[
+            "Sequence templates will sit beside newsletters and transactional emails in the same admin shell.",
+            "Each sequence step can later point at one immutable email-content row with send timing rules.",
+            "The navigation is in place now so the client can already see where that workflow will live.",
+          ]}
+        />
+      ) : null}
 
-        {activeScreen === "emails" ? (
-          <DcxAdminEmailsCatalogPage
-            apiBaseUrl={apiBaseUrl}
-            initialEmailType={initialEmailType}
-            onEmailTypeRouteChange={(nextEmailType) =>
-              navigateToPathname(buildPathnameForEmailType(nextEmailType))
-            }
-          />
-        ) : null}
+      {activeScreen === "content_public" ? (
+        <DcxAdminUxStringsCatalogPage
+          apiBaseUrl={apiBaseUrl}
+          surfaceScope="public"
+          eyebrow="UX"
+          title="Public-site UX strings"
+          description="Browse and edit the live public-site UX strings that feed the multilingual public frontend experience."
+        />
+      ) : null}
 
-        {activeScreen === "newsletters" ? (
-          <DcxAdminNewslettersPage
-            apiBaseUrl={apiBaseUrl}
-            routeLanguageCode={routeLanguageCode}
-            routeEmailKey={routeNewsletterKey}
-            onOpenNewsletter={(params) => navigateToPathname(buildPathnameForNewsletter(params))}
-          />
-        ) : null}
+      {activeScreen === "content_app" ? (
+        <DcxAdminUxStringsCatalogPage
+          apiBaseUrl={apiBaseUrl}
+          surfaceScope="app"
+          eyebrow="UX"
+          title="App UX strings"
+          description="Browse and edit the live app UX strings, including the account and shell labels already wired through the multilingual user surface."
+        />
+      ) : null}
 
-        {activeScreen === "publish_public_site" ? (
-          <DcxAdminPublicSitePublishPage
-            apiBaseUrl={apiBaseUrl}
-          />
-        ) : null}
-      </section>
-    </main>
+      {activeScreen === "content_admin" ? (
+        <DcxAdminUxStringsCatalogPage
+          apiBaseUrl={apiBaseUrl}
+          surfaceScope="admin"
+          eyebrow="UX"
+          title="Admin UX strings"
+          description="Browse and edit the live admin-facing UX strings as the internal CMS language and workflow copy continue to grow."
+        />
+      ) : null}
+
+      {activeScreen === "publish_public_site" ? (
+        <DcxAdminPublicSitePublishPage
+          apiBaseUrl={apiBaseUrl}
+        />
+      ) : null}
+    </DcxAdminShell>
   )
 }
 

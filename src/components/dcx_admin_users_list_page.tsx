@@ -63,7 +63,7 @@ export function DcxAdminUsersListPage(props: Props) {
 
   return (
     <section className="flex flex-col gap-6">
-      <section className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -79,13 +79,13 @@ export function DcxAdminUsersListPage(props: Props) {
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3 text-sm text-slate-600">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1">
+            <span className="border border-slate-200 bg-slate-50 px-3 py-1">
               Read-only MVP admin surface
             </span>
             <Button
               type="button"
               variant="outline"
-              className="h-8 rounded-full px-4 text-xs"
+              className="h-8 rounded-none px-4 text-xs"
               onClick={() => usersListQuery.refetch()}
             >
               Refresh
@@ -119,21 +119,21 @@ export function DcxAdminUsersListPage(props: Props) {
       {!usersListQuery.isLoading && !usersListQuery.isError ? (
         <>
           <section className="grid gap-4 md:grid-cols-3">
-            <article className="rounded-[1.5rem] border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total users</p>
               <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{totalUserCount}</p>
             </article>
-            <article className="rounded-[1.5rem] border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Confirmed</p>
               <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{confirmedUserCount}</p>
             </article>
-            <article className="rounded-[1.5rem] border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Languages seen</p>
               <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{languageCount}</p>
             </article>
           </section>
 
-          <section className="overflow-hidden rounded-[1.75rem] border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+          <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
             <div className="flex items-center justify-between gap-4 border-b border-black/6 px-6 py-5">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -143,7 +143,7 @@ export function DcxAdminUsersListPage(props: Props) {
                   Current DCX users
                 </h2>
               </div>
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+              <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
                 Ordered by latest activity
               </div>
             </div>
@@ -175,7 +175,7 @@ export function DcxAdminUsersListPage(props: Props) {
                         </div>
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                        <span className="bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                           {user.account_status}
                         </span>
                       </td>

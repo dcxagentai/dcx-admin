@@ -12,9 +12,14 @@ import {
   type DcxAdminUxStringCatalogRow,
 } from "../lib/read_dcx_admin_live_ux_strings_catalog"
 import { saveDcxAdminLiveUxStringRow } from "../lib/save_dcx_admin_live_ux_string_row"
+import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   apiBaseUrl: string
+  surfaceScope?: "all" | "public" | "app" | "admin"
+  eyebrow?: string
+  title?: string
+  description?: string
 }
 
 type EditableFieldVisualState = "idle" | "editing" | "saving" | "saved" | "error"
@@ -34,6 +39,25 @@ function buildUniqueValues(values: string[]): string[] {
   return [...new Set(values)]
 }
 
+function readMatchesSurfaceScope(
+  row: DcxAdminUxStringCatalogRow,
+  surfaceScope: NonNullable<Props["surfaceScope"]>,
+): boolean {
+  if (surfaceScope === "all") {
+    return true
+  }
+
+  if (surfaceScope === "app") {
+    return row.string_group.startsWith("app_")
+  }
+
+  if (surfaceScope === "admin") {
+    return row.string_group.startsWith("admin_")
+  }
+
+  return !row.string_group.startsWith("app_") && !row.string_group.startsWith("admin_")
+}
+
 function LabeledSelect(props: {
   label: string
   value: string
@@ -48,7 +72,7 @@ function LabeledSelect(props: {
       <select
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}
-        className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-slate-300"
+        className="h-11 border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-slate-300"
       >
         {props.options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -118,7 +142,7 @@ function CatalogTextCard(props: {
   isDisabled?: boolean
 }) {
   return (
-    <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
       <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
           {props.eyebrow}
@@ -143,7 +167,7 @@ function CatalogTextCard(props: {
                   {props.statusText}
                 </p>
               </div>
-              <textarea
+              <Textarea
                 value={props.draftText ?? ""}
                 onFocus={props.onFocusText}
                 onChange={(event) => props.onChangeText?.(event.target.value)}
@@ -151,13 +175,13 @@ function CatalogTextCard(props: {
                 disabled={props.isDisabled}
                 rows={7}
                 className={[
-                  "w-full resize-y rounded-[1.25rem] border bg-slate-50 px-5 py-4 text-base leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
+                  "w-full resize-y rounded-none border bg-slate-50 px-5 py-4 text-base leading-7 text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:opacity-70",
                   readEditableFieldBorderClass(props.visualState ?? "idle"),
                 ].join(" ")}
               />
             </div>
           ) : (
-            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-5 py-5">
+            <div className="border border-slate-200 bg-slate-50 px-5 py-5">
               <p className="whitespace-pre-wrap text-base leading-7 text-slate-900">{props.row.text}</p>
             </div>
           )}
@@ -187,6 +211,7 @@ function CatalogTextCard(props: {
 }
 
 export function DcxAdminUxStringsCatalogPage(props: Props) {
+  const surfaceScope = props.surfaceScope ?? "all"
   const queryClient = useQueryClient()
   const resetVisualStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const catalogQuery = useQuery({
@@ -205,8 +230,9 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
       }),
   })
 
-  const uxStrings = catalogQuery.data?.data.ux_strings ?? []
-  const totalLiveRowCount = catalogQuery.data?.data.total_live_row_count ?? 0
+  const allUxStrings = catalogQuery.data?.data.ux_strings ?? []
+  const uxStrings = allUxStrings.filter((row) => readMatchesSurfaceScope(row, surfaceScope))
+  const totalLiveRowCount = uxStrings.length
 
   const availableGroups = buildUniqueValues(uxStrings.map((row) => row.string_group))
   const [selectedGroup, setSelectedGroup] = useState("")
@@ -341,22 +367,21 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
 
   return (
     <section className="flex flex-col gap-6">
-      <section className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Content
+              {props.eyebrow ?? "Content"}
             </p>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-              UX strings
+              {props.title ?? "UX strings"}
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              Browse one live original string row against one selected language row. The selected
-              language panel is now editable and autosaves into the immutable multilingual
-              UX-string model.
+              {props.description ??
+                "Browse one live original string row against one selected language row. The selected language panel is now editable and autosaves into the immutable multilingual UX-string model."}
             </p>
           </div>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+          <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
             {totalLiveRowCount} live rows
           </div>
         </div>
@@ -381,33 +406,39 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
         ) : null}
 
         {!catalogQuery.isLoading && !catalogQuery.isError ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            <LabeledSelect
-              label="Group"
-              value={selectedGroup}
-              options={availableGroups.map((group) => ({ value: group, label: group }))}
-              onChange={setSelectedGroup}
-            />
-            <LabeledSelect
-              label="UX string"
-              value={selectedKey}
-              options={availableKeys.map((key) => ({ value: key, label: key }))}
-              onChange={setSelectedKey}
-            />
-            <LabeledSelect
-              label="Language"
-              value={selectedLanguageCode}
-              options={selectedKeyRows.map((row) => ({
-                value: row.language.language_code,
-                label: `${row.language.language_name_native} (${row.language.language_code})`,
-              }))}
-              onChange={setSelectedLanguageCode}
-            />
-          </div>
+          availableGroups.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              <LabeledSelect
+                label="Group"
+                value={selectedGroup}
+                options={availableGroups.map((group) => ({ value: group, label: group }))}
+                onChange={setSelectedGroup}
+              />
+              <LabeledSelect
+                label="UX string"
+                value={selectedKey}
+                options={availableKeys.map((key) => ({ value: key, label: key }))}
+                onChange={setSelectedKey}
+              />
+              <LabeledSelect
+                label="Language"
+                value={selectedLanguageCode}
+                options={selectedKeyRows.map((row) => ({
+                  value: row.language.language_code,
+                  label: `${row.language.language_name_native} (${row.language.language_code})`,
+                }))}
+                onChange={setSelectedLanguageCode}
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              No live UX-string groups currently exist for this surface.
+            </p>
+          )
         ) : null}
       </section>
 
-      {!catalogQuery.isLoading && !catalogQuery.isError ? (
+      {!catalogQuery.isLoading && !catalogQuery.isError && availableGroups.length > 0 ? (
         <section className="grid gap-6 xl:grid-cols-2">
           <CatalogTextCard
             eyebrow="Original"

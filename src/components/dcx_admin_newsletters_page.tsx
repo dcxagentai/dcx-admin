@@ -24,7 +24,16 @@ import {
 } from "../lib/read_dcx_admin_newsletter_sends_catalog"
 import { prepareDcxAdminNewsletterSend } from "../lib/prepare_dcx_admin_newsletter_send"
 import { cancelDcxAdminNewsletterSend } from "../lib/cancel_dcx_admin_newsletter_send"
+import {
+  DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS,
+  readDcxAdminEditableFieldBorderClass,
+  readDcxAdminEditableFieldCompactStatusLabel,
+  readDcxAdminEditableFieldStatusTextClass,
+  type DcxAdminEditableFieldVisualState,
+} from "../lib/dcx_admin_editable_field_visuals"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   apiBaseUrl: string
@@ -32,8 +41,6 @@ type Props = {
   routeLanguageCode: string | null
   onOpenNewsletter: (params: { emailKey: string; languageCode: string }) => void
 }
-
-type EditorVisualState = "idle" | "editing" | "saving" | "saved" | "error"
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
@@ -62,20 +69,6 @@ function readTimestampFromDateTimeLocalInput(value: string): number | null {
     return null
   }
   return parsedDate.getTime()
-}
-
-function readVisualBorderClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "border-amber-300"
-  if (state === "saved") return "border-emerald-300"
-  if (state === "error") return "border-red-300"
-  return "border-sky-300"
-}
-
-function readVisualTextClass(state: EditorVisualState): string {
-  if (state === "editing" || state === "saving") return "text-amber-600"
-  if (state === "saved") return "text-emerald-600"
-  if (state === "error") return "text-red-600"
-  return "text-sky-700"
 }
 
 function buildDetailSnapshot(detail: DcxAdminNewsletterDetail): string {
@@ -110,7 +103,7 @@ function NewsletterRow(props: {
       type="button"
       onClick={props.onClick}
       className={[
-        "flex w-full flex-col gap-1 rounded-[1.25rem] border px-4 py-4 text-left transition",
+        "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
         props.isSelected
           ? "border-slate-900 bg-slate-900 text-white"
           : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
@@ -133,7 +126,7 @@ function NewsletterSendRow(props: {
   cancelDisabled: boolean
 }) {
   return (
-    <div className="rounded-[1.2rem] border border-black/6 bg-white px-4 py-4">
+        <div className="border border-black/6 bg-white px-4 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-slate-950">
@@ -288,10 +281,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   const [newNewsletterSubject, setNewNewsletterSubject] = useState("")
   const [editorDraft, setEditorDraft] = useState<{ email_subject: string; email_body: string } | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
-  const [visualState, setVisualState] = useState<EditorVisualState>("idle")
-  const [statusText, setStatusText] = useState(
-    "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-  )
+  const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
   const [scheduledSendInput, setScheduledSendInput] = useState("")
   const [sendStatusText, setSendStatusText] = useState(
     "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
@@ -302,9 +292,6 @@ export function DcxAdminNewslettersPage(props: Props) {
       setEditorDraft(null)
       setLastSavedSnapshot("")
       setVisualState("idle")
-      setStatusText(
-        "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-      )
       return
     }
 
@@ -315,9 +302,6 @@ export function DcxAdminNewslettersPage(props: Props) {
     setEditorDraft(nextDraft)
     setLastSavedSnapshot(buildDetailSnapshot(detail))
     setVisualState("idle")
-    setStatusText(
-      "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-    )
   }, [detail?.email_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
@@ -361,7 +345,7 @@ export function DcxAdminNewslettersPage(props: Props) {
     [props.routeEmailKey],
   )
 
-  async function persistCurrentDraft(saveLabel: string): Promise<void> {
+  async function persistCurrentDraft(): Promise<void> {
     if (!detail || !editorDraft || !isDirty) {
       return
     }
@@ -371,7 +355,6 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
 
     setVisualState("saving")
-    setStatusText(saveLabel)
     try {
       await saveMutation.mutateAsync({
         emailId: detail.email_id,
@@ -379,20 +362,12 @@ export function DcxAdminNewslettersPage(props: Props) {
         emailBody: editorDraft.email_body,
       })
       setVisualState("saved")
-      setStatusText("Newsletter draft saved.")
       if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
       resetStateTimeoutRef.current = setTimeout(() => {
         setVisualState("idle")
-        setStatusText(
-          "Blue means editable. Orange means changed. Autosave runs every 30 seconds or you can save now.",
-        )
-      }, 1400)
+      }, DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS)
     } catch (error) {
       setVisualState("error")
-      setStatusText(
-        (error as Error & { suggested_action?: string }).suggested_action ??
-          "Save failed. Keep the tab open and retry after the backend is healthy.",
-      )
     }
   }
 
@@ -402,11 +377,10 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
 
     setVisualState("editing")
-    setStatusText("Editing. Save now or wait for the 30 second autosave.")
 
     if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
     autosaveTimeoutRef.current = setTimeout(() => {
-      void persistCurrentDraft("Saving newsletter draft...")
+      void persistCurrentDraft()
     }, 30000)
   }, [detail, editorDraft, isDirty, isAnyWritePending])
 
@@ -461,7 +435,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
       <section className="space-y-6">
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Newsletters</h2>
@@ -470,7 +444,7 @@ export function DcxAdminNewslettersPage(props: Props) {
             </p>
           </div>
 
-          <div className="space-y-3 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+          <div className="space-y-3 border border-black/6 bg-slate-50 px-4 py-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
               New newsletter
             </p>
@@ -478,9 +452,9 @@ export function DcxAdminNewslettersPage(props: Props) {
               value={newNewsletterSubject}
               onChange={(event) => setNewNewsletterSubject(event.target.value)}
               placeholder="Newsletter subject"
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+              className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
             />
-            <button
+            <Button
               type="button"
               onClick={() =>
                 createDraftMutation.mutate({
@@ -489,10 +463,10 @@ export function DcxAdminNewslettersPage(props: Props) {
                 })
               }
               disabled={createDraftMutation.isPending || newNewsletterSubject.trim() === ""}
-              className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
             >
               {createDraftMutation.isPending ? "Creating newsletter..." : "New newsletter"}
-            </button>
+            </Button>
             {createDraftMutation.isError ? (
               <p className="text-sm text-red-600">
                 {(createDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
@@ -502,7 +476,7 @@ export function DcxAdminNewslettersPage(props: Props) {
           </div>
         </article>
 
-        <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog</p>
@@ -542,7 +516,7 @@ export function DcxAdminNewslettersPage(props: Props) {
         </article>
       </section>
 
-      <article className="rounded-[1.75rem] border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
@@ -551,8 +525,8 @@ export function DcxAdminNewslettersPage(props: Props) {
             </h3>
           </div>
           {detail ? (
-            <p className={["text-xs font-medium", readVisualTextClass(visualState)].join(" ")}>
-              {statusText}
+            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
             </p>
           ) : null}
         </div>
@@ -575,11 +549,11 @@ export function DcxAdminNewslettersPage(props: Props) {
               <input
                 value={editorDraft.email_subject}
                 onChange={(event) => setEditorDraft({ ...editorDraft, email_subject: event.target.value })}
-                className={["h-12 w-full rounded-2xl border bg-slate-50 px-4 text-base outline-none", readVisualBorderClass(visualState)].join(" ")}
+                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
               />
             </label>
 
-            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   Translations
@@ -604,7 +578,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                       })
                     }
                     className={[
-                      "rounded-full border px-4 py-2 text-sm font-medium transition",
+                      "border px-4 py-2 text-sm font-medium transition",
                       translation.is_current_language
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
@@ -623,7 +597,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {detail.translation_summary.missing_languages.map((language) => (
-                      <button
+                      <Button
                         key={language.language_code}
                         type="button"
                         onClick={() =>
@@ -632,12 +606,13 @@ export function DcxAdminNewslettersPage(props: Props) {
                           })
                         }
                         disabled={createTranslationMutation.isPending}
-                        className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                        variant="outline"
+                        className="rounded-none border-slate-200 bg-white px-4 py-2 text-slate-700 hover:border-slate-300 hover:text-slate-950"
                       >
                         {createTranslationMutation.isPending
                           ? "Creating..."
                           : `Create ${language.language_name_native}`}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
@@ -658,17 +633,17 @@ export function DcxAdminNewslettersPage(props: Props) {
             <div className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
-                <textarea
+                <Textarea
                   value={editorDraft.email_body}
                   onChange={(event) => setEditorDraft({ ...editorDraft, email_body: event.target.value })}
                   rows={18}
-                  className={["min-h-[28rem] w-full resize-y rounded-[1.1rem] border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readVisualBorderClass(visualState)].join(" ")}
+                  className={["min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
                 />
               </label>
               <div className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
                 <div
-                  className="prose prose-slate min-h-[28rem] max-w-none rounded-[1.1rem] border border-black/6 bg-slate-50 px-5 py-5"
+                  className="prose prose-slate min-h-[28rem] max-w-none border border-black/6 bg-slate-50 px-5 py-5"
                   dangerouslySetInnerHTML={{
                     __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
                   }}
@@ -677,17 +652,18 @@ export function DcxAdminNewslettersPage(props: Props) {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button
+              <Button
                 type="button"
-                onClick={() => void persistCurrentDraft("Saving newsletter draft...")}
+                onClick={() => void persistCurrentDraft()}
                 disabled={!isDirty || isAnyWritePending}
-                className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                variant="outline"
+                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
               >
                 {saveMutation.isPending ? "Saving..." : "Save newsletter"}
-              </button>
+              </Button>
             </div>
 
-            <section className="space-y-4 rounded-[1.25rem] border border-black/6 bg-slate-50 px-4 py-4">
+            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -704,7 +680,7 @@ export function DcxAdminNewslettersPage(props: Props) {
 
               <p className="text-sm leading-6 text-slate-600">{sendStatusText}</p>
 
-              <div className="rounded-[1.1rem] border border-black/6 bg-white px-4 py-4">
+              <div className="border border-black/6 bg-white px-4 py-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     Language readiness
@@ -732,7 +708,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                       </div>
                       <div
                         className={[
-                          "rounded-full px-3 py-1 text-xs font-medium",
+                          "px-3 py-1 text-xs font-medium",
                           row.has_live_translation
                             ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
                             : "border border-amber-200 bg-amber-50 text-amber-700",
@@ -746,7 +722,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                   ))}
                 </div>
                 {detail.language_readiness.missing_languages.length > 0 ? (
-                  <div className="mt-4 rounded-[1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     This newsletter still needs live translations in{" "}
                     {detail.language_readiness.missing_languages
                       .map((language) => language.language_name_native)
@@ -761,24 +737,25 @@ export function DcxAdminNewslettersPage(props: Props) {
                   type="datetime-local"
                   value={scheduledSendInput}
                   onChange={(event) => setScheduledSendInput(event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+                  className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
                 />
-                <button
+                <Button
                   type="button"
                   onClick={handlePrepareSendNow}
                   disabled={!canPrepareSend}
-                  className="inline-flex h-11 items-center justify-center rounded-full bg-slate-900 px-5 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
                 >
                   {prepareSendMutation.isPending ? "Preparing..." : "Prepare send now"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={handlePrepareScheduledSend}
                   disabled={!canPrepareSend || scheduledSendAtTsMs === null}
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                  variant="outline"
+                  className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
                 >
                   Prepare scheduled send
-                </button>
+                </Button>
               </div>
 
               {sendsCatalogQuery.isLoading ? (
