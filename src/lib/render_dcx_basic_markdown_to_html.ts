@@ -25,7 +25,7 @@ function formatInlineMarkdown(value: string): string {
 export function renderDcxBasicMarkdownToHtml(markdown: string): string {
   const normalized = markdown.replace(/\r\n/g, "\n").trim()
   if (normalized === "") {
-    return '<p class="text-slate-400">Nothing to preview yet.</p>'
+    return '<p class="mt-5 text-[1.05rem] leading-[1.95] text-slate-400">Nothing to preview yet.</p>'
   }
 
   const lines = normalized.split("\n")
@@ -51,7 +51,7 @@ export function renderDcxBasicMarkdownToHtml(markdown: string): string {
       if (currentListType !== "ul") {
         closeList()
         currentListType = "ul"
-        htmlParts.push('<ul class="list-disc space-y-2 pl-6">')
+        htmlParts.push('<ul class="mt-5 mb-5 list-disc space-y-2 pl-6 text-[1.05rem] leading-[1.95] text-slate-700">')
       }
       htmlParts.push(`<li>${formatInlineMarkdown(unorderedMatch[1])}</li>`)
       continue
@@ -62,7 +62,7 @@ export function renderDcxBasicMarkdownToHtml(markdown: string): string {
       if (currentListType !== "ol") {
         closeList()
         currentListType = "ol"
-        htmlParts.push('<ol class="list-decimal space-y-2 pl-6">')
+        htmlParts.push('<ol class="mt-5 mb-5 list-decimal space-y-2 pl-6 text-[1.05rem] leading-[1.95] text-slate-700">')
       }
       htmlParts.push(`<li>${formatInlineMarkdown(orderedMatch[1])}</li>`)
       continue
@@ -70,20 +70,28 @@ export function renderDcxBasicMarkdownToHtml(markdown: string): string {
 
     closeList()
 
+    if (trimmed.startsWith("##### ")) {
+      htmlParts.push(`<h5 class="mt-8 mb-4 text-[1.1rem] font-bold leading-[1.2] tracking-[-0.02em] text-slate-950">${formatInlineMarkdown(trimmed.slice(6))}</h5>`)
+      continue
+    }
+    if (trimmed.startsWith("#### ")) {
+      htmlParts.push(`<h4 class="mt-8 mb-4 text-[1.25rem] font-bold leading-[1.2] tracking-[-0.02em] text-slate-950">${formatInlineMarkdown(trimmed.slice(5))}</h4>`)
+      continue
+    }
     if (trimmed.startsWith("### ")) {
-      htmlParts.push(`<h3 class="text-lg font-semibold">${formatInlineMarkdown(trimmed.slice(4))}</h3>`)
+      htmlParts.push(`<h3 class="mt-8 mb-4 text-[1.45rem] font-bold leading-[1.2] tracking-[-0.02em] text-slate-950">${formatInlineMarkdown(trimmed.slice(4))}</h3>`)
       continue
     }
     if (trimmed.startsWith("## ")) {
-      htmlParts.push(`<h2 class="text-xl font-semibold">${formatInlineMarkdown(trimmed.slice(3))}</h2>`)
+      htmlParts.push(`<h2 class="mt-8 mb-4 text-[1.7rem] font-bold leading-[1.2] tracking-[-0.02em] text-slate-950">${formatInlineMarkdown(trimmed.slice(3))}</h2>`)
       continue
     }
     if (trimmed.startsWith("# ")) {
-      htmlParts.push(`<h1 class="text-2xl font-semibold">${formatInlineMarkdown(trimmed.slice(2))}</h1>`)
+      htmlParts.push(`<h1 class="mt-8 mb-4 text-[2rem] font-bold leading-[1.2] tracking-[-0.02em] text-slate-950">${formatInlineMarkdown(trimmed.slice(2))}</h1>`)
       continue
     }
 
-    htmlParts.push(`<p>${formatInlineMarkdown(trimmed)}</p>`)
+    htmlParts.push(`<p class="mt-5 text-[1.05rem] leading-[1.95] text-slate-700">${formatInlineMarkdown(trimmed)}</p>`)
   }
 
   closeList()

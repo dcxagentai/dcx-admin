@@ -643,7 +643,7 @@ export function DcxAdminNewslettersPage(props: Props) {
               <div className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
                 <div
-                  className="prose prose-slate min-h-[28rem] max-w-none border border-black/6 bg-slate-50 px-5 py-5"
+                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
                   dangerouslySetInnerHTML={{
                     __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
                   }}
