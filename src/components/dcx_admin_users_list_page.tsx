@@ -115,21 +115,21 @@ function DcxAdminUsersDirectoryTableSection(props: {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse">
+        <table className="min-w-full table-fixed border-collapse">
           <thead className="bg-slate-50/80">
             <tr className="text-left">
               {[
-                { key: "primary_email_value", label: "Email" },
-                { key: "primary_email_status", label: "Email" },
-                { key: "primary_phone_status", label: "Phone" },
-                { key: "language", label: "Language" },
-                { key: "last_seen", label: "Last seen" },
-                { key: "created", label: "Created" },
-                { key: "uuid", label: "UUID" },
+                { key: "primary_email_value", label: "Email", widthClassName: "w-[18rem]" },
+                { key: "primary_email_status", label: "Email", widthClassName: "w-[7rem]" },
+                { key: "primary_phone_status", label: "Phone", widthClassName: "w-[7rem]" },
+                { key: "language", label: "Language", widthClassName: "w-[11rem]" },
+                { key: "last_seen", label: "Last seen", widthClassName: "w-[12rem]" },
+                { key: "created", label: "Created", widthClassName: "w-[12rem]" },
+                { key: "uuid", label: "UUID", widthClassName: "w-[16rem]" },
               ].map((heading) => (
                 <th
                   key={heading.key}
-                  className="px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500"
+                  className={`px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500 ${heading.widthClassName}`}
                 >
                   {heading.label}
                 </th>
@@ -142,10 +142,10 @@ function DcxAdminUsersDirectoryTableSection(props: {
                 key={user.user_id}
                 className={userIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
               >
-                <td className="px-6 py-4 align-top">
+                <td className="w-[18rem] px-6 py-4 align-top">
                   <div className="space-y-1">
                     <p
-                      className="max-w-[18rem] truncate text-sm font-medium text-slate-950"
+                      className="block w-full truncate text-sm font-medium text-slate-950"
                       title={user.primary_email}
                     >
                       {user.primary_email}
@@ -176,8 +176,8 @@ function DcxAdminUsersDirectoryTableSection(props: {
                 <td className="px-6 py-4 align-top text-sm text-slate-900">
                   {formatTimestampLabel(user.created_at_ts_ms)}
                 </td>
-                <td className="px-6 py-4 align-top text-xs text-slate-500">
-                  <span className="block max-w-[16rem] truncate" title={user.user_uuid}>
+                <td className="w-[16rem] px-6 py-4 align-top text-xs text-slate-500">
+                  <span className="block w-full truncate" title={user.user_uuid}>
                     {user.user_uuid}
                   </span>
                 </td>
