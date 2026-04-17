@@ -47,6 +47,42 @@ function buildLanguageCount(users: DcxAdminUserListRow[]): number {
   ).size
 }
 
+function renderContactStatusCell(params: {
+  heading: "email" | "phone"
+  contactValue: string | null
+  isVerified: boolean | null
+}) {
+  if (!params.contactValue) {
+    return <span className="text-sm text-slate-300">-</span>
+  }
+
+  if (params.isVerified) {
+    return (
+      <span
+        aria-label={`Primary ${params.heading} verified`}
+        className="inline-flex items-center"
+        title={`Primary ${params.heading} verified: ${params.contactValue}`}
+      >
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[0.7rem] font-bold leading-none text-white">
+          ✓
+        </span>
+      </span>
+    )
+  }
+
+  return (
+    <span
+      aria-label={`Primary ${params.heading} saved but not yet verified`}
+      className="inline-flex items-center"
+      title={`Primary ${params.heading} saved but not yet verified: ${params.contactValue}`}
+    >
+      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[0.7rem] font-bold leading-none text-white">
+        ✓
+      </span>
+    </span>
+  )
+}
+
 export function DcxAdminUsersListPage(props: Props) {
   const usersListQuery = useQuery({
     queryKey: ["dcx_admin_users_list"],
@@ -152,12 +188,20 @@ export function DcxAdminUsersListPage(props: Props) {
               <table className="min-w-full border-collapse">
                 <thead className="bg-slate-50/80">
                   <tr className="text-left">
-                    {["Email", "Status", "Language", "Confirmed", "Last seen", "Created", "UUID"].map((heading) => (
+                    {[
+                      { key: "primary_email_value", label: "Email" },
+                      { key: "primary_email_status", label: "Email" },
+                      { key: "primary_phone_status", label: "Phone" },
+                      { key: "language", label: "Language" },
+                      { key: "last_seen", label: "Last seen" },
+                      { key: "created", label: "Created" },
+                      { key: "uuid", label: "UUID" },
+                    ].map((heading) => (
                       <th
-                        key={heading}
+                        key={heading.key}
                         className="px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500"
                       >
-                        {heading}
+                        {heading.label}
                       </th>
                     ))}
                   </tr>
@@ -175,15 +219,21 @@ export function DcxAdminUsersListPage(props: Props) {
                         </div>
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        <span className="bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                          {user.account_status}
-                        </span>
+                        {renderContactStatusCell({
+                          heading: "email",
+                          contactValue: user.primary_email,
+                          isVerified: user.primary_email_confirmed,
+                        })}
+                      </td>
+                      <td className="px-6 py-4 align-top text-sm text-slate-900">
+                        {renderContactStatusCell({
+                          heading: "phone",
+                          contactValue: user.primary_phone,
+                          isVerified: user.primary_phone_confirmed,
+                        })}
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-slate-900">
                         {renderLanguageLabel(user)}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {user.primary_email_confirmed ? "Yes" : "No"}
                       </td>
                       <td className="px-6 py-4 align-top text-sm text-slate-900">
                         {formatTimestampLabel(user.last_seen_at_ts_ms)}
