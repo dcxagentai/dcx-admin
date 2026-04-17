@@ -144,7 +144,12 @@ function DcxAdminUsersDirectoryTableSection(props: {
               >
                 <td className="px-6 py-4 align-top">
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-slate-950">{user.primary_email}</p>
+                    <p
+                      className="max-w-[18rem] truncate text-sm font-medium text-slate-950"
+                      title={user.primary_email}
+                    >
+                      {user.primary_email}
+                    </p>
                     <p className="text-xs text-slate-500">{user.email_communication_preference}</p>
                   </div>
                 </td>
@@ -171,7 +176,11 @@ function DcxAdminUsersDirectoryTableSection(props: {
                 <td className="px-6 py-4 align-top text-sm text-slate-900">
                   {formatTimestampLabel(user.created_at_ts_ms)}
                 </td>
-                <td className="px-6 py-4 align-top text-xs text-slate-500">{user.user_uuid}</td>
+                <td className="px-6 py-4 align-top text-xs text-slate-500">
+                  <span className="block max-w-[16rem] truncate" title={user.user_uuid}>
+                    {user.user_uuid}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
