@@ -5,6 +5,12 @@
  * premium interface before editing, roles, and broader admin navigation exist.
  */
 import { useQuery } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 
 import {
@@ -67,6 +73,30 @@ function buildDcxAdminDirectoryGroups(users: DcxAdminUserListRow[]) {
   }
 }
 
+function readDcxAdminDirectoryColumnWidthClass(columnId: string): string {
+  if (columnId === "primary_email_value") {
+    return "w-[18rem]"
+  }
+
+  if (columnId === "primary_email_status" || columnId === "primary_phone_status") {
+    return "w-[7rem]"
+  }
+
+  if (columnId === "language") {
+    return "w-[11rem]"
+  }
+
+  if (columnId === "last_seen" || columnId === "created") {
+    return "w-[12rem]"
+  }
+
+  if (columnId === "uuid") {
+    return "w-[16rem]"
+  }
+
+  return ""
+}
+
 function renderContactStatusCell(params: {
   heading: "email" | "phone"
   contactValue: string | null
@@ -103,11 +133,83 @@ function renderContactStatusCell(params: {
   )
 }
 
+const dcxAdminDirectoryColumnHelper = createColumnHelper<DcxAdminUserListRow>()
+
+const dcxAdminDirectoryColumns = [
+  dcxAdminDirectoryColumnHelper.accessor("primary_email", {
+    id: "primary_email_value",
+    header: "Email",
+    cell: (cellContext) => (
+      <div className="space-y-1">
+        <p
+          className="block w-full truncate text-sm font-medium text-slate-950"
+          title={cellContext.row.original.primary_email}
+        >
+          {cellContext.row.original.primary_email}
+        </p>
+        <p className="text-xs text-slate-500">
+          {cellContext.row.original.email_communication_preference}
+        </p>
+      </div>
+    ),
+  }),
+  dcxAdminDirectoryColumnHelper.display({
+    id: "primary_email_status",
+    header: "Email",
+    cell: (cellContext) =>
+      renderContactStatusCell({
+        heading: "email",
+        contactValue: cellContext.row.original.primary_email,
+        isVerified: cellContext.row.original.primary_email_confirmed,
+      }),
+  }),
+  dcxAdminDirectoryColumnHelper.display({
+    id: "primary_phone_status",
+    header: "Phone",
+    cell: (cellContext) =>
+      renderContactStatusCell({
+        heading: "phone",
+        contactValue: cellContext.row.original.primary_phone,
+        isVerified: cellContext.row.original.primary_phone_confirmed,
+      }),
+  }),
+  dcxAdminDirectoryColumnHelper.display({
+    id: "language",
+    header: "Language",
+    cell: (cellContext) => renderLanguageLabel(cellContext.row.original),
+  }),
+  dcxAdminDirectoryColumnHelper.accessor("last_seen_at_ts_ms", {
+    id: "last_seen",
+    header: "Last seen",
+    cell: (cellContext) => formatTimestampLabel(cellContext.getValue()),
+  }),
+  dcxAdminDirectoryColumnHelper.accessor("created_at_ts_ms", {
+    id: "created",
+    header: "Created",
+    cell: (cellContext) => formatTimestampLabel(cellContext.getValue()),
+  }),
+  dcxAdminDirectoryColumnHelper.accessor("user_uuid", {
+    id: "uuid",
+    header: "UUID",
+    cell: (cellContext) => (
+      <span className="block w-full truncate" title={cellContext.getValue()}>
+        {cellContext.getValue()}
+      </span>
+    ),
+  }),
+]
+
 function DcxAdminUsersDirectoryTableSection(props: {
   title: string
   users: DcxAdminUserListRow[]
   emptyLabel: string
 }) {
+  const table = useReactTable({
+    data: props.users,
+    columns: dcxAdminDirectoryColumns,
+    getCoreRowModel: getCoreRowModel(),
+  })
+
   return (
     <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
       <div className="border-b border-black/6 px-6 py-5">
@@ -117,70 +219,35 @@ function DcxAdminUsersDirectoryTableSection(props: {
       <div className="overflow-x-auto">
         <table className="min-w-full table-fixed border-collapse">
           <thead className="bg-slate-50/80">
-            <tr className="text-left">
-              {[
-                { key: "primary_email_value", label: "Email", widthClassName: "w-[18rem]" },
-                { key: "primary_email_status", label: "Email", widthClassName: "w-[7rem]" },
-                { key: "primary_phone_status", label: "Phone", widthClassName: "w-[7rem]" },
-                { key: "language", label: "Language", widthClassName: "w-[11rem]" },
-                { key: "last_seen", label: "Last seen", widthClassName: "w-[12rem]" },
-                { key: "created", label: "Created", widthClassName: "w-[12rem]" },
-                { key: "uuid", label: "UUID", widthClassName: "w-[16rem]" },
-              ].map((heading) => (
-                <th
-                  key={heading.key}
-                  className={`px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500 ${heading.widthClassName}`}
-                >
-                  {heading.label}
-                </th>
-              ))}
-            </tr>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="text-left">
+                {headerGroup.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className={`px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500 ${readDcxAdminDirectoryColumnWidthClass(header.column.id)}`}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
           </thead>
           <tbody>
-            {props.users.map((user, userIndex) => (
+            {table.getRowModel().rows.map((row, rowIndex) => (
               <tr
-                key={user.user_id}
-                className={userIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+                key={row.id}
+                className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
               >
-                <td className="w-[18rem] px-6 py-4 align-top">
-                  <div className="space-y-1">
-                    <p
-                      className="block w-full truncate text-sm font-medium text-slate-950"
-                      title={user.primary_email}
-                    >
-                      {user.primary_email}
-                    </p>
-                    <p className="text-xs text-slate-500">{user.email_communication_preference}</p>
-                  </div>
-                </td>
-                <td className="px-6 py-4 align-top text-sm text-slate-900">
-                  {renderContactStatusCell({
-                    heading: "email",
-                    contactValue: user.primary_email,
-                    isVerified: user.primary_email_confirmed,
-                  })}
-                </td>
-                <td className="px-6 py-4 align-top text-sm text-slate-900">
-                  {renderContactStatusCell({
-                    heading: "phone",
-                    contactValue: user.primary_phone,
-                    isVerified: user.primary_phone_confirmed,
-                  })}
-                </td>
-                <td className="px-6 py-4 align-top text-sm text-slate-900">
-                  {renderLanguageLabel(user)}
-                </td>
-                <td className="px-6 py-4 align-top text-sm text-slate-900">
-                  {formatTimestampLabel(user.last_seen_at_ts_ms)}
-                </td>
-                <td className="px-6 py-4 align-top text-sm text-slate-900">
-                  {formatTimestampLabel(user.created_at_ts_ms)}
-                </td>
-                <td className="w-[16rem] px-6 py-4 align-top text-xs text-slate-500">
-                  <span className="block w-full truncate" title={user.user_uuid}>
-                    {user.user_uuid}
-                  </span>
-                </td>
+                {row.getVisibleCells().map((cell) => (
+                  <td
+                    key={cell.id}
+                    className={`px-6 py-4 align-top text-sm text-slate-900 ${readDcxAdminDirectoryColumnWidthClass(cell.column.id)}`}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
