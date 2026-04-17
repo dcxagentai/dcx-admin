@@ -47,6 +47,26 @@ function buildLanguageCount(users: DcxAdminUserListRow[]): number {
   ).size
 }
 
+function normalizeDcxAdminDirectoryRole(userRole: string | null | undefined): "dev" | "admin" | "user" {
+  if (userRole === "dev") {
+    return "dev"
+  }
+
+  if (userRole === "admin") {
+    return "admin"
+  }
+
+  return "user"
+}
+
+function buildDcxAdminDirectoryGroups(users: DcxAdminUserListRow[]) {
+  return {
+    dev: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "dev"),
+    admin: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "admin"),
+    user: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "user"),
+  }
+}
+
 function renderContactStatusCell(params: {
   heading: "email" | "phone"
   contactValue: string | null
@@ -83,6 +103,88 @@ function renderContactStatusCell(params: {
   )
 }
 
+function DcxAdminUsersDirectoryTableSection(props: {
+  title: string
+  users: DcxAdminUserListRow[]
+  emptyLabel: string
+}) {
+  return (
+    <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="border-b border-black/6 px-6 py-5">
+        <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse">
+          <thead className="bg-slate-50/80">
+            <tr className="text-left">
+              {[
+                { key: "primary_email_value", label: "Email" },
+                { key: "primary_email_status", label: "Email" },
+                { key: "primary_phone_status", label: "Phone" },
+                { key: "language", label: "Language" },
+                { key: "last_seen", label: "Last seen" },
+                { key: "created", label: "Created" },
+                { key: "uuid", label: "UUID" },
+              ].map((heading) => (
+                <th
+                  key={heading.key}
+                  className="px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500"
+                >
+                  {heading.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {props.users.map((user, userIndex) => (
+              <tr
+                key={user.user_id}
+                className={userIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+              >
+                <td className="px-6 py-4 align-top">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-slate-950">{user.primary_email}</p>
+                    <p className="text-xs text-slate-500">{user.email_communication_preference}</p>
+                  </div>
+                </td>
+                <td className="px-6 py-4 align-top text-sm text-slate-900">
+                  {renderContactStatusCell({
+                    heading: "email",
+                    contactValue: user.primary_email,
+                    isVerified: user.primary_email_confirmed,
+                  })}
+                </td>
+                <td className="px-6 py-4 align-top text-sm text-slate-900">
+                  {renderContactStatusCell({
+                    heading: "phone",
+                    contactValue: user.primary_phone,
+                    isVerified: user.primary_phone_confirmed,
+                  })}
+                </td>
+                <td className="px-6 py-4 align-top text-sm text-slate-900">
+                  {renderLanguageLabel(user)}
+                </td>
+                <td className="px-6 py-4 align-top text-sm text-slate-900">
+                  {formatTimestampLabel(user.last_seen_at_ts_ms)}
+                </td>
+                <td className="px-6 py-4 align-top text-sm text-slate-900">
+                  {formatTimestampLabel(user.created_at_ts_ms)}
+                </td>
+                <td className="px-6 py-4 align-top text-xs text-slate-500">{user.user_uuid}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {props.users.length === 0 ? (
+          <div className="px-6 py-10 text-sm text-slate-500">{props.emptyLabel}</div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 export function DcxAdminUsersListPage(props: Props) {
   const usersListQuery = useQuery({
     queryKey: ["dcx_admin_users_list"],
@@ -96,6 +198,7 @@ export function DcxAdminUsersListPage(props: Props) {
   const totalUserCount = usersListQuery.data?.data.total_user_count ?? 0
   const confirmedUserCount = buildConfirmedUserCount(users)
   const languageCount = buildLanguageCount(users)
+  const groupedUsers = buildDcxAdminDirectoryGroups(users)
 
   return (
     <section className="flex flex-col gap-6">
@@ -169,8 +272,8 @@ export function DcxAdminUsersListPage(props: Props) {
             </article>
           </section>
 
-          <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-black/6 px-6 py-5">
+          <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+            <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Directory
@@ -183,77 +286,23 @@ export function DcxAdminUsersListPage(props: Props) {
                 Ordered by latest activity
               </div>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead className="bg-slate-50/80">
-                  <tr className="text-left">
-                    {[
-                      { key: "primary_email_value", label: "Email" },
-                      { key: "primary_email_status", label: "Email" },
-                      { key: "primary_phone_status", label: "Phone" },
-                      { key: "language", label: "Language" },
-                      { key: "last_seen", label: "Last seen" },
-                      { key: "created", label: "Created" },
-                      { key: "uuid", label: "UUID" },
-                    ].map((heading) => (
-                      <th
-                        key={heading.key}
-                        className="px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500"
-                      >
-                        {heading.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user, userIndex) => (
-                    <tr
-                      key={user.user_id}
-                      className={userIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
-                    >
-                      <td className="px-6 py-4 align-top">
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-slate-950">{user.primary_email}</p>
-                          <p className="text-xs text-slate-500">{user.email_communication_preference}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {renderContactStatusCell({
-                          heading: "email",
-                          contactValue: user.primary_email,
-                          isVerified: user.primary_email_confirmed,
-                        })}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {renderContactStatusCell({
-                          heading: "phone",
-                          contactValue: user.primary_phone,
-                          isVerified: user.primary_phone_confirmed,
-                        })}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {renderLanguageLabel(user)}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {formatTimestampLabel(user.last_seen_at_ts_ms)}
-                      </td>
-                      <td className="px-6 py-4 align-top text-sm text-slate-900">
-                        {formatTimestampLabel(user.created_at_ts_ms)}
-                      </td>
-                      <td className="px-6 py-4 align-top text-xs text-slate-500">
-                        {user.user_uuid}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {users.length === 0 ? (
-                <div className="px-6 py-10 text-sm text-slate-500">No DCX users found yet.</div>
-              ) : null}
-            </div>
           </section>
+
+          <DcxAdminUsersDirectoryTableSection
+            title="Dev"
+            users={groupedUsers.dev}
+            emptyLabel="No dev users found yet."
+          />
+          <DcxAdminUsersDirectoryTableSection
+            title="Admin"
+            users={groupedUsers.admin}
+            emptyLabel="No admin users found yet."
+          />
+          <DcxAdminUsersDirectoryTableSection
+            title="Users"
+            users={groupedUsers.user}
+            emptyLabel="No standard users found yet."
+          />
         </>
       ) : null}
     </section>

@@ -41,6 +41,7 @@ export type DcxAdminUserListRow = {
   primary_phone: string | null
   primary_phone_confirmed: boolean | null
   primary_phone_confirmed_at_ts_ms: number | null
+  user_role: string
   account_status: string
   email_communication_preference: string
   last_seen_at_ts_ms: number | null
