@@ -6,7 +6,7 @@
  */
 import { type FormEvent, useState } from "react"
 import { Button } from "@/components/ui/button"
-import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
+import dcxLogo from "@/assets/dcx_logo.png"
 
 type Props = {
   isPending: boolean

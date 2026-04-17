@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
-@import "@prompteoai/dcx-branding/theme.css";
+@import "./styles/dcx_admin_local_branding_theme.css";
 
 body {
   margin: 0;

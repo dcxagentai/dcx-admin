@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import dcxLogo from "@prompteoai/dcx-branding/assets/dcx_logo.png"
+import dcxLogo from "@/assets/dcx_logo.png"
 import {
   CalendarDaysIcon,
   FilesIcon,
