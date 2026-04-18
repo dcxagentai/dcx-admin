@@ -4,7 +4,13 @@
  * It exists so internal users can see whether public-copy and published-page edits are waiting for publish and can
  * manually trigger a new Cloudflare Pages rebuild now that dcx_public reads live DB content at build time.
  */
+import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table"
 
 import {
   readDcxAdminPublicSitePublishStatus,
@@ -12,12 +18,24 @@ import {
 } from "../lib/read_dcx_admin_public_site_publish_status"
 import { markDcxAdminPublicSiteLocalRebuildComplete } from "../lib/mark_dcx_admin_public_site_local_rebuild_complete"
 import { triggerDcxAdminPublicSitePublishRun } from "../lib/trigger_dcx_admin_public_site_publish_run"
+import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 type Props = {
   apiBaseUrl: string
 }
 
 type PublishHealthTone = "green" | "orange" | "red"
+
+const pendingChangeColumnHelper = createColumnHelper<DcxAdminPublicSitePendingChangePreviewRow>()
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
@@ -95,31 +113,49 @@ function MetadataRow(props: { label: string; value: string }) {
   )
 }
 
-function PendingChangeRow(props: { row: DcxAdminPublicSitePendingChangePreviewRow }) {
+function formatPendingContentKindLabel(contentKind: string): string {
+  return contentKind.replaceAll("_", " ")
+}
+
+function readPendingChangeSearchLabel(row: DcxAdminPublicSitePendingChangePreviewRow): string {
+  return [
+    row.primary_label,
+    row.secondary_label ?? "",
+    row.public_path ?? "",
+    row.language_name_native,
+    row.language_code,
+    formatPendingContentKindLabel(row.content_kind),
+  ]
+    .join(" ")
+    .toLowerCase()
+}
+
+function DcxAdminSortableHeader(props: {
+  column: {
+    getIsSorted: () => false | "asc" | "desc"
+    toggleSorting: (desc?: boolean) => void
+  }
+  title: string
+}) {
   return (
-    <li className="flex flex-wrap items-center justify-between gap-4 border-b border-black/5 py-3 last:border-b-0">
-      <div className="min-w-0 space-y-1">
-        <p className="text-sm font-medium text-slate-950">
-          {props.row.primary_label}
-        </p>
-        {props.row.secondary_label ? (
-          <p className="text-sm text-slate-600">{props.row.secondary_label}</p>
-        ) : null}
-        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-          {props.row.content_kind.replace("_", " ")} · {props.row.language_name_native} (
-          {props.row.language_code})
-        </p>
-        {props.row.public_path ? (
-          <p className="text-xs text-slate-500">{props.row.public_path}</p>
-        ) : null}
-      </div>
-      <p className="text-sm text-slate-600">{formatTimestampLabel(props.row.updated_at_ts_ms)}</p>
-    </li>
+    <button
+      type="button"
+      className="inline-flex items-center gap-2 text-left"
+      onClick={() => props.column.toggleSorting(props.column.getIsSorted() === "asc")}
+    >
+      <span>{props.title}</span>
+      <ArrowUpDownIcon className="h-3.5 w-3.5 text-slate-400" />
+    </button>
   )
 }
 
 export function DcxAdminPublicSitePublishPage(props: Props) {
   const queryClient = useQueryClient()
+  const [pendingChangesFilterValue, setPendingChangesFilterValue] = useState("")
+  const [pendingChangesSorting, setPendingChangesSorting] = useState<SortingState>([
+    { id: "updated_at_ts_ms", desc: true },
+  ])
+  const [pendingChangesColumnVisibility, setPendingChangesColumnVisibility] = useState<VisibilityState>({})
   const publishStatusQuery = useQuery({
     queryKey: ["dcx_admin_public_site_publish_status"],
     queryFn: async () =>
@@ -160,6 +196,115 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
         lastPublishStatus: publishStatus.last_publish_status,
       })
     : "orange"
+  const pendingChangeColumns = useMemo(
+    () => [
+      pendingChangeColumnHelper.accessor("primary_label", {
+        id: "primary_label",
+        header: ({ column }) => (
+          <DcxAdminSortableHeader column={column} title="Item" />
+        ),
+        cell: ({ row }) => (
+          <div className="min-w-0 space-y-1">
+            <p className="truncate font-medium text-slate-950">{row.original.primary_label}</p>
+            {row.original.secondary_label ? (
+              <p
+                title={row.original.secondary_label}
+                className="truncate text-sm text-slate-600"
+              >
+                {row.original.secondary_label}
+              </p>
+            ) : null}
+          </div>
+        ),
+        sortingFn: "text",
+      }),
+      pendingChangeColumnHelper.accessor("content_kind", {
+        id: "content_kind",
+        header: ({ column }) => (
+          <DcxAdminSortableHeader column={column} title="Kind" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-sm capitalize text-slate-700">
+            {formatPendingContentKindLabel(row.original.content_kind)}
+          </span>
+        ),
+      }),
+      pendingChangeColumnHelper.accessor("language_name_native", {
+        id: "language_name_native",
+        header: ({ column }) => (
+          <DcxAdminSortableHeader column={column} title="Language" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-sm text-slate-700">
+            {row.original.language_name_native} ({row.original.language_code})
+          </span>
+        ),
+      }),
+      pendingChangeColumnHelper.accessor("public_path", {
+        id: "public_path",
+        header: "Public path",
+        cell: ({ row }) =>
+          row.original.public_path ? (
+            <span title={row.original.public_path} className="block truncate text-sm text-slate-600">
+              {row.original.public_path}
+            </span>
+          ) : (
+            <span className="text-sm text-slate-400">-</span>
+          ),
+      }),
+      pendingChangeColumnHelper.accessor("updated_at_ts_ms", {
+        id: "updated_at_ts_ms",
+        header: ({ column }) => (
+          <DcxAdminSortableHeader column={column} title="Updated" />
+        ),
+        cell: ({ row }) => (
+          <span className="text-sm text-slate-700">
+            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+          </span>
+        ),
+        sortingFn: "basic",
+      }),
+    ],
+    [],
+  )
+  const filteredPendingChanges = useMemo(() => {
+    if (!publishStatus) {
+      return []
+    }
+
+    const normalizedFilterValue = pendingChangesFilterValue.trim().toLowerCase()
+    if (normalizedFilterValue === "") {
+      return publishStatus.pending_changes_preview
+    }
+
+    return publishStatus.pending_changes_preview.filter((row) =>
+      readPendingChangeSearchLabel(row).includes(normalizedFilterValue),
+    )
+  }, [pendingChangesFilterValue, publishStatus])
+
+  function readPendingChangeColumnWidthClassName(columnId: string): string {
+    if (columnId === "primary_label") {
+      return "w-[28%]"
+    }
+
+    if (columnId === "content_kind") {
+      return "w-[14%]"
+    }
+
+    if (columnId === "language_name_native") {
+      return "w-[14%]"
+    }
+
+    if (columnId === "public_path") {
+      return "w-[26%]"
+    }
+
+    if (columnId === "updated_at_ts_ms") {
+      return "w-[18%] whitespace-nowrap"
+    }
+
+    return ""
+  }
 
   return (
     <section className="flex flex-col gap-6">
@@ -345,19 +490,70 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
             </div>
           </div>
 
+          {publishStatus.pending_changes_preview.length > 0 ? (
+            <div className="mb-5 flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-center lg:justify-between">
+              <Input
+                value={pendingChangesFilterValue}
+                onChange={(event) => setPendingChangesFilterValue(event.target.value)}
+                placeholder="Filter pending changes..."
+                className="h-10 w-full max-w-sm rounded-none border-black/8 bg-white px-3 text-sm"
+              />
+              <div className="flex items-center gap-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="rounded-none">
+                      Columns
+                      <ChevronDownIcon className="ml-2 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-none">
+                    {pendingChangeColumns
+                      .filter((column) => column.id !== undefined)
+                      .map((column) => (
+                        <DropdownMenuCheckboxItem
+                          key={column.id}
+                          className="capitalize"
+                          checked={pendingChangesColumnVisibility[column.id!] !== false}
+                          onCheckedChange={(value) =>
+                            setPendingChangesColumnVisibility((currentState) => ({
+                              ...currentState,
+                              [column.id!]: !!value,
+                            }))
+                          }
+                        >
+                          {column.id === "primary_label"
+                            ? "Item"
+                            : column.id === "content_kind"
+                              ? "Kind"
+                              : column.id === "language_name_native"
+                                ? "Language"
+                                : column.id === "public_path"
+                                  ? "Public path"
+                                  : "Updated"}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          ) : null}
+
           {publishStatus.pending_changes_preview.length === 0 ? (
             <p className="text-sm text-slate-500">
               No current public-content rows are waiting for the next rebuild.
             </p>
           ) : (
-            <ul>
-              {publishStatus.pending_changes_preview.map((row) => (
-                <PendingChangeRow
-                  key={`${row.content_kind}-${row.item_id}-${row.language_code}-${row.updated_at_ts_ms}`}
-                  row={row}
-                />
-              ))}
-            </ul>
+            <DcxAdminDataTable
+              columns={pendingChangeColumns}
+              data={filteredPendingChanges}
+              emptyLabel="No pending changes match the current filter."
+              sorting={pendingChangesSorting}
+              onSortingChange={setPendingChangesSorting}
+              columnVisibility={pendingChangesColumnVisibility}
+              onColumnVisibilityChange={setPendingChangesColumnVisibility}
+              readColumnWidthClassName={readPendingChangeColumnWidthClassName}
+              pageSize={50}
+            />
           )}
         </section>
       ) : null}
