@@ -204,17 +204,12 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
           <DcxAdminSortableHeader column={column} title="Item" />
         ),
         cell: ({ row }) => (
-          <div className="min-w-0 space-y-1">
-            <p className="truncate font-medium text-slate-950">{row.original.primary_label}</p>
-            {row.original.secondary_label ? (
-              <p
-                title={row.original.secondary_label}
-                className="truncate text-sm text-slate-600"
-              >
-                {row.original.secondary_label}
-              </p>
-            ) : null}
-          </div>
+          <span
+            title={row.original.secondary_label ?? row.original.primary_label}
+            className="block truncate font-medium text-slate-950"
+          >
+            {row.original.primary_label}
+          </span>
         ),
         sortingFn: "text",
       }),
@@ -224,7 +219,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
           <DcxAdminSortableHeader column={column} title="Kind" />
         ),
         cell: ({ row }) => (
-          <span className="text-sm capitalize text-slate-700">
+          <span className="block truncate text-sm capitalize text-slate-700">
             {formatPendingContentKindLabel(row.original.content_kind)}
           </span>
         ),
@@ -235,7 +230,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
           <DcxAdminSortableHeader column={column} title="Language" />
         ),
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="block truncate text-sm text-slate-700">
             {row.original.language_name_native} ({row.original.language_code})
           </span>
         ),
@@ -258,7 +253,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
           <DcxAdminSortableHeader column={column} title="Updated" />
         ),
         cell: ({ row }) => (
-          <span className="text-sm text-slate-700">
+          <span className="block truncate text-sm text-slate-700">
             {formatTimestampLabel(row.original.updated_at_ts_ms)}
           </span>
         ),
@@ -284,11 +279,11 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
 
   function readPendingChangeColumnWidthClassName(columnId: string): string {
     if (columnId === "primary_label") {
-      return "w-[28%]"
+      return "w-[24%]"
     }
 
     if (columnId === "content_kind") {
-      return "w-[14%]"
+      return "w-[18%]"
     }
 
     if (columnId === "language_name_native") {
@@ -296,7 +291,7 @@ export function DcxAdminPublicSitePublishPage(props: Props) {
     }
 
     if (columnId === "public_path") {
-      return "w-[26%]"
+      return "w-[28%]"
     }
 
     if (columnId === "updated_at_ts_ms") {
