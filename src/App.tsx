@@ -64,6 +64,8 @@ type DcxAdminRouteState = {
   routePageKey: string | null
   routeEmailKey?: string | null
   routeNewsletterKey: string | null
+  routeUxStringGroup?: string | null
+  routeUxStringKey?: string | null
 }
 
 function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteState {
@@ -189,6 +191,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/translations/ux/")) {
+    const uxSegments = pathname.replace("/translations/ux/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "ux_strings",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
+    }
+  }
+
   if (pathname === "/content/ux") {
     return {
       activeScreen: "ux_strings",
@@ -202,6 +222,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/content/ux/")) {
+    const uxSegments = pathname.replace("/content/ux/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "ux_strings",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
+    }
+  }
+
   if (pathname === "/ux/public") {
     return {
       activeScreen: "content_public",
@@ -212,6 +250,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routePageKey: null,
       routeEmailKey: null,
       routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/ux/public/")) {
+    const uxSegments = pathname.replace("/ux/public/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_public",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
     }
   }
 
@@ -244,6 +300,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/ux/app/")) {
+    const uxSegments = pathname.replace("/ux/app/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_app",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
+    }
+  }
+
   if (pathname === "/ux/admin") {
     return {
       activeScreen: "content_admin",
@@ -254,6 +328,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routePageKey: null,
       routeEmailKey: null,
       routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/ux/admin/")) {
+    const uxSegments = pathname.replace("/ux/admin/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_admin",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
     }
   }
 
@@ -323,6 +415,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/content/public/")) {
+    const uxSegments = pathname.replace("/content/public/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_public",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
+    }
+  }
+
   if (pathname === "/content/app") {
     return {
       activeScreen: "content_app",
@@ -336,6 +446,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/content/app/")) {
+    const uxSegments = pathname.replace("/content/app/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_app",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
+    }
+  }
+
   if (pathname === "/content/admin") {
     return {
       activeScreen: "content_admin",
@@ -346,6 +474,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routePageKey: null,
       routeEmailKey: null,
       routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/content/admin/")) {
+    const uxSegments = pathname.replace("/content/admin/", "").split("/").filter(Boolean)
+    if (uxSegments.length >= 3) {
+      return {
+        activeScreen: "content_admin",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: decodeURIComponent(uxSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: null,
+        routeNewsletterKey: null,
+        routeUxStringGroup: decodeURIComponent(uxSegments[1]),
+        routeUxStringKey: decodeURIComponent(uxSegments.slice(2).join("/")),
+      }
     }
   }
 
@@ -414,6 +560,22 @@ function buildPathnameForNewsletter(params: { languageCode: string; emailKey: st
 
 function buildPathnameForTransactionalEmail(params: { languageCode: string; emailKey: string }): string {
   return `/content/emails/transactional/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
+}
+
+function buildPathnameForUxString(
+  surfaceScope: "all" | "public" | "app" | "admin",
+  params: { languageCode: string; stringGroup: string; stringKey: string },
+): string {
+  const routePrefix =
+    surfaceScope === "public"
+      ? "/ux/public"
+      : surfaceScope === "app"
+        ? "/ux/app"
+        : surfaceScope === "admin"
+          ? "/ux/admin"
+          : "/content/ux"
+
+  return `${routePrefix}/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.stringGroup)}/${encodeURIComponent(params.stringKey)}`
 }
 
 function readDcxAdminApiBaseUrl(): string {
@@ -601,6 +763,8 @@ function App() {
   const routePageKey = routeState.routePageKey
   const routeEmailKey = routeState.routeEmailKey ?? null
   const routeNewsletterKey = routeState.routeNewsletterKey
+  const routeUxStringGroup = routeState.routeUxStringGroup ?? null
+  const routeUxStringKey = routeState.routeUxStringKey ?? null
   const sessionRequiredErrorCode =
     (authenticatedSessionQuery.error as Error & { code?: string } | null)?.code ?? null
   const isSessionExplicitlyMissing = sessionRequiredErrorCode === "API_DCX_AUTH_SESSION_REQUIRED"
@@ -740,6 +904,11 @@ function App() {
       {activeScreen === "ux_strings" ? (
         <DcxAdminUxStringsCatalogPage
           apiBaseUrl={apiBaseUrl}
+          routeLanguageCode={routeLanguageCode}
+          routeStringGroup={routeUxStringGroup}
+          routeStringKey={routeUxStringKey}
+          onOpenUxString={(params) => navigateToPathname(buildPathnameForUxString("all", params))}
+          onReturnToCatalog={() => navigateToPathname("/content/ux")}
         />
       ) : null}
 
@@ -795,6 +964,11 @@ function App() {
           eyebrow="UX"
           title="Public-site UX strings"
           description="Browse and edit the live public-site UX strings that feed the multilingual public frontend experience."
+          routeLanguageCode={routeLanguageCode}
+          routeStringGroup={routeUxStringGroup}
+          routeStringKey={routeUxStringKey}
+          onOpenUxString={(params) => navigateToPathname(buildPathnameForUxString("public", params))}
+          onReturnToCatalog={() => navigateToPathname("/ux/public")}
         />
       ) : null}
 
@@ -805,6 +979,11 @@ function App() {
           eyebrow="UX"
           title="App UX strings"
           description="Browse and edit the live app UX strings, including the account and shell labels already wired through the multilingual user surface."
+          routeLanguageCode={routeLanguageCode}
+          routeStringGroup={routeUxStringGroup}
+          routeStringKey={routeUxStringKey}
+          onOpenUxString={(params) => navigateToPathname(buildPathnameForUxString("app", params))}
+          onReturnToCatalog={() => navigateToPathname("/ux/app")}
         />
       ) : null}
 
@@ -815,6 +994,11 @@ function App() {
           eyebrow="UX"
           title="Admin UX strings"
           description="Browse and edit the live admin-facing UX strings as the internal CMS language and workflow copy continue to grow."
+          routeLanguageCode={routeLanguageCode}
+          routeStringGroup={routeUxStringGroup}
+          routeStringKey={routeUxStringKey}
+          onOpenUxString={(params) => navigateToPathname(buildPathnameForUxString("admin", params))}
+          onReturnToCatalog={() => navigateToPathname("/ux/admin")}
         />
       ) : null}
 

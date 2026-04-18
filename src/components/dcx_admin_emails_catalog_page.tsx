@@ -18,6 +18,8 @@ import {
   type DcxAdminEmailCatalogRow,
 } from "../lib/read_dcx_admin_live_emails_catalog"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
+import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
+import { DcxAdminTranslationLanguageControls } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
@@ -177,7 +179,7 @@ function DcxAdminSortableHeader(props: {
 
 function CatalogEmailCard(props: {
   eyebrow: string
-  title: string
+  title: React.ReactNode
   row: DcxAdminEmailCatalogRow | null
   emptyMessage: string
   editable?: boolean
@@ -646,11 +648,19 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
-            <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-              {selectedLanguageRow
-                ? `${selectedLanguageRow.language.language_name_native} transactional email`
-                : "Select a transactional email"}
-            </h3>
+            {selectedLanguageRow ? (
+              <h3 className="text-xl font-semibold tracking-tight text-slate-950">
+                <DcxAdminLanguageFlagLabel
+                  languageCode={selectedLanguageRow.language.language_code}
+                  label={`${selectedLanguageRow.language.language_name_native} transactional email`}
+                  textClassName="text-xl font-semibold tracking-tight text-slate-950"
+                />
+              </h3>
+            ) : (
+              <h3 className="text-xl font-semibold tracking-tight text-slate-950">
+                Select a transactional email
+              </h3>
+            )}
           </div>
           {selectedLanguageRow ? (
             <p
@@ -674,38 +684,29 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
 
         {!catalogQuery.isLoading && !catalogQuery.isError && selectedLanguageRow ? (
           <div className="space-y-6">
-            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Language rows</p>
-                <h4 className="text-lg font-semibold tracking-tight text-slate-950">Available translations</h4>
-                <p className="text-sm leading-6 text-slate-600">
-                  Open another live language row here when you want to compare or edit a different transactional template translation.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {availableLanguageRows.map((row) => (
-                  <button
-                    key={row.email_id}
-                    type="button"
-                    onClick={() =>
-                      props.onOpenEmail({
-                        emailKey: row.email_key,
-                        languageCode: row.language.language_code,
-                      })
-                    }
-                    className={[
-                      "border px-4 py-2 text-sm font-medium transition",
-                      row.email_id === selectedLanguageRow.email_id
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
-                    ].join(" ")}
-                  >
-                    {row.language.language_name_native}
-                    {row.is_original ? " · original" : ""}
-                  </button>
-                ))}
-              </div>
-            </section>
+            <DcxAdminTranslationLanguageControls
+              eyebrow="Language rows"
+              title="Available translations"
+              description="Open another live language row here when you want to compare or edit a different transactional template translation."
+              existingLanguageRows={availableLanguageRows.map((row) => ({
+                language_code: row.language.language_code,
+                language_name_native: row.language.language_name_native,
+                is_original: row.is_original,
+              }))}
+              selectedLanguageCode={selectedLanguageRow.language.language_code}
+              onSelectExistingLanguage={(languageCode) => {
+                const matchingRow = availableLanguageRows.find(
+                  (row) => row.language.language_code === languageCode,
+                )
+                if (!matchingRow) {
+                  return
+                }
+                props.onOpenEmail({
+                  emailKey: matchingRow.email_key,
+                  languageCode,
+                })
+              }}
+            />
 
             {originalRow && selectedLanguageRow.email_id !== originalRow.email_id ? (
               <section className="grid gap-6 xl:grid-cols-2">
@@ -717,7 +718,13 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
                 />
                 <CatalogEmailCard
                   eyebrow="Selected language"
-                  title={`${selectedLanguageRow.language.language_name_native} (${selectedLanguageRow.language.language_code})`}
+                  title={
+                    <DcxAdminLanguageFlagLabel
+                      languageCode={selectedLanguageRow.language.language_code}
+                      label={`${selectedLanguageRow.language.language_name_native} (${selectedLanguageRow.language.language_code})`}
+                      textClassName="text-lg font-semibold tracking-tight text-slate-950"
+                    />
+                  }
                   row={selectedLanguageRow}
                   emptyMessage="No live row exists for the selected language yet."
                   editable

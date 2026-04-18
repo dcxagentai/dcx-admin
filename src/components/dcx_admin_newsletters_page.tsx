@@ -38,6 +38,8 @@ import {
   type DcxAdminEditableFieldVisualState,
 } from "../lib/dcx_admin_editable_field_visuals"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
+import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
+import { DcxAdminTranslationLanguageControls } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
@@ -729,9 +731,17 @@ export function DcxAdminNewslettersPage(props: Props) {
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
-            <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-              {detail ? `${detail.language.language_name_native} newsletter` : "Select a newsletter"}
-            </h3>
+            {detail ? (
+              <h3 className="text-xl font-semibold tracking-tight text-slate-950">
+                <DcxAdminLanguageFlagLabel
+                  languageCode={detail.language.language_code}
+                  label={`${detail.language.language_name_native} newsletter`}
+                  textClassName="text-xl font-semibold tracking-tight text-slate-950"
+                />
+              </h3>
+            ) : (
+              <h3 className="text-xl font-semibold tracking-tight text-slate-950">Select a newsletter</h3>
+            )}
           </div>
           {detail ? (
             <div className="flex flex-col items-end gap-3">
@@ -800,76 +810,48 @@ export function DcxAdminNewslettersPage(props: Props) {
               </div>
             </div>
 
-            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Translations</p>
-                <h4 className="text-lg font-semibold tracking-tight text-slate-950">
-                  Existing and missing language rows
-                </h4>
-                <p className="text-sm leading-6 text-slate-600">
-                  Newsletters follow the same original/translation model as transactional templates. Create missing language rows here before preparing real sends for users who prefer those languages.
-                </p>
-              </div>
+            <DcxAdminTranslationLanguageControls
+              title="Existing and missing language rows"
+              description="Newsletters follow the same original/translation model as transactional templates. Create missing language rows here before preparing real sends for users who prefer those languages."
+              existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
+                language_code: translation.language.language_code,
+                language_name_native: translation.language.language_name_native,
+                is_original: translation.is_original,
+              }))}
+              selectedLanguageCode={detail.language.language_code}
+              onSelectExistingLanguage={(languageCode) => {
+                const matchingTranslation = detail.translation_summary.existing_translations.find(
+                  (translation) => translation.language.language_code === languageCode,
+                )
+                if (!matchingTranslation) {
+                  return
+                }
+                props.onOpenNewsletter({
+                  emailKey: matchingTranslation.email_key,
+                  languageCode,
+                })
+              }}
+              missingLanguages={detail.translation_summary.missing_languages}
+              onCreateMissingLanguage={(languageCode) =>
+                createTranslationMutation.mutate({
+                  targetLanguageCode: languageCode,
+                })
+              }
+              isCreatePending={createTranslationMutation.isPending}
+            />
 
-              <div className="flex flex-wrap gap-3">
-                {detail.translation_summary.existing_translations.map((translation) => (
-                  <button
-                    key={translation.language.language_code}
-                    type="button"
-                    onClick={() =>
-                      props.onOpenNewsletter({
-                        emailKey: translation.email_key,
-                        languageCode: translation.language.language_code,
-                      })
-                    }
-                    className={[
-                      "border px-4 py-2 text-sm font-medium transition",
-                      translation.is_current_language
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
-                    ].join(" ")}
-                  >
-                    {translation.language.language_name_native}
-                    {translation.is_original ? " · original" : ""}
-                  </button>
-                ))}
-              </div>
+            {detail.translation_summary.missing_languages.length === 0 ? (
+              <p className="text-sm text-emerald-700">
+                This newsletter already has live rows in every currently supported language.
+              </p>
+            ) : null}
 
-              {detail.translation_summary.missing_languages.length > 0 ? (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Missing languages</p>
-                  <div className="flex flex-wrap gap-3">
-                    {detail.translation_summary.missing_languages.map((language) => (
-                      <Button
-                        key={language.language_code}
-                        type="button"
-                        onClick={() =>
-                          createTranslationMutation.mutate({
-                            targetLanguageCode: language.language_code,
-                          })
-                        }
-                        disabled={createTranslationMutation.isPending}
-                        variant="outline"
-                        className="rounded-none border-slate-200 bg-white px-4 py-2 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-                      >
-                        {createTranslationMutation.isPending ? "Creating..." : `Create ${language.language_name_native}`}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-emerald-700">
-                  This newsletter already has live rows in every currently supported language.
-                </p>
-              )}
-
-              {createTranslationMutation.isError ? (
-                <p className="text-sm text-red-600">
-                  {(createTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                    (createTranslationMutation.error as Error).message}
-                </p>
-              ) : null}
-            </section>
+            {createTranslationMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(createTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (createTranslationMutation.error as Error).message}
+              </p>
+            ) : null}
 
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-4">
