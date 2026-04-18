@@ -62,6 +62,7 @@ type DcxAdminRouteState = {
   routeLanguageCode: string | null
   routeCategoryKey: string | null
   routePageKey: string | null
+  routeEmailKey?: string | null
   routeNewsletterKey: string | null
 }
 
@@ -74,6 +75,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -86,6 +88,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -103,6 +106,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
         routeLanguageCode: decodeURIComponent(categorySegments[0]),
         routeCategoryKey: decodeURIComponent(categorySegments.slice(1).join("/")),
         routePageKey: null,
+        routeEmailKey: null,
         routeNewsletterKey: null,
       }
     }
@@ -116,6 +120,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -130,6 +135,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
         routeLanguageCode: decodeURIComponent(pageSegments[0]),
         routeCategoryKey: null,
         routePageKey: decodeURIComponent(pageSegments.slice(1).join("/")),
+        routeEmailKey: null,
         routeNewsletterKey: null,
       }
     }
@@ -143,6 +149,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -163,6 +170,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
         routeLanguageCode: decodeURIComponent(newsletterSegments[0]),
         routeCategoryKey: null,
         routePageKey: null,
+        routeEmailKey: null,
         routeNewsletterKey: decodeURIComponent(newsletterSegments.slice(1).join("/")),
       }
     }
@@ -176,6 +184,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -188,6 +197,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -200,7 +210,24 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/content/emails/transactional/")) {
+    const emailSegments = pathname.replace("/content/emails/transactional/", "").split("/").filter(Boolean)
+    if (emailSegments.length >= 2) {
+      return {
+        activeScreen: "emails",
+        pathname,
+        initialEmailType: "transactional",
+        routeLanguageCode: decodeURIComponent(emailSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: decodeURIComponent(emailSegments.slice(1).join("/")),
+        routeNewsletterKey: null,
+      }
     }
   }
 
@@ -212,6 +239,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -224,6 +252,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -236,6 +265,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -248,6 +278,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -260,6 +291,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -273,6 +305,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -285,6 +318,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -297,6 +331,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -309,6 +344,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routeLanguageCode: null,
       routeCategoryKey: null,
       routePageKey: null,
+      routeEmailKey: null,
       routeNewsletterKey: null,
     }
   }
@@ -374,6 +410,10 @@ function buildPathnameForContentPage(params: { languageCode: string; pageKey: st
 
 function buildPathnameForNewsletter(params: { languageCode: string; emailKey: string }): string {
   return `/content/emails/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
+}
+
+function buildPathnameForTransactionalEmail(params: { languageCode: string; emailKey: string }): string {
+  return `/content/emails/transactional/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
 }
 
 function readDcxAdminApiBaseUrl(): string {
@@ -559,6 +599,7 @@ function App() {
   const routeLanguageCode = routeState.routeLanguageCode
   const routeCategoryKey = routeState.routeCategoryKey
   const routePageKey = routeState.routePageKey
+  const routeEmailKey = routeState.routeEmailKey ?? null
   const routeNewsletterKey = routeState.routeNewsletterKey
   const sessionRequiredErrorCode =
     (authenticatedSessionQuery.error as Error & { code?: string } | null)?.code ?? null
@@ -716,9 +757,10 @@ function App() {
         <DcxAdminEmailsCatalogPage
           apiBaseUrl={apiBaseUrl}
           initialEmailType={initialEmailType}
-          onEmailTypeRouteChange={(nextEmailType) =>
-            navigateToPathname(buildPathnameForEmailType(nextEmailType))
-          }
+          routeLanguageCode={routeLanguageCode}
+          routeEmailKey={routeEmailKey}
+          onOpenEmail={(params) => navigateToPathname(buildPathnameForTransactionalEmail(params))}
+          onReturnToCatalog={() => navigateToPathname(buildPathnameForEmailType("transactional"))}
         />
       ) : null}
 
@@ -728,6 +770,7 @@ function App() {
           routeLanguageCode={routeLanguageCode}
           routeEmailKey={routeNewsletterKey}
           onOpenNewsletter={(params) => navigateToPathname(buildPathnameForNewsletter(params))}
+          onReturnToCatalog={() => navigateToPathname("/content/emails/newsletters")}
         />
       ) : null}
 

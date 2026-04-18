@@ -1,25 +1,45 @@
 /**
  * CONTEXT:
- * First editable emails viewer for the DCX admin frontend.
- * It exists to let internal users browse one original email row against one selected language
- * row, then autosave edits on the selected-language panel using the immutable backend version model.
+ * Transactional emails admin surface for the DCX internal frontend.
+ * It exists to let internal users browse transactional templates in one table-driven catalog,
+ * then open one dedicated editor route that compares the original row with one selected language row.
  */
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table"
 
 import {
   readDcxAdminLiveEmailsCatalog,
   type DcxAdminEmailCatalogRow,
 } from "../lib/read_dcx_admin_live_emails_catalog"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
+import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 
 type Props = {
   apiBaseUrl: string
   initialEmailType?: string | null
-  onEmailTypeRouteChange?: (nextEmailType: string | null) => void
+  routeEmailKey?: string | null
+  routeLanguageCode?: string | null
+  onOpenEmail: (params: { emailKey: string; languageCode: string }) => void
+  onReturnToCatalog: () => void
 }
 
 type EditableFieldVisualState = "idle" | "editing" | "saving" | "saved" | "error"
+
+const transactionalEmailColumnHelper = createColumnHelper<DcxAdminEmailCatalogRow>()
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
@@ -32,34 +52,8 @@ function formatTimestampLabel(timestampMs: number | null): string {
   }).format(new Date(timestampMs))
 }
 
-function buildUniqueValues(values: string[]): string[] {
-  return [...new Set(values)]
-}
-
-function LabeledSelect(props: {
-  label: string
-  value: string
-  options: Array<{ value: string; label: string }>
-  onChange: (value: string) => void
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-2">
-      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-        {props.label}
-      </span>
-      <select
-        value={props.value}
-        onChange={(event) => props.onChange(event.target.value)}
-        className="h-11 border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition focus:border-slate-300"
-      >
-        {props.options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
+function renderLanguageLabel(language: DcxAdminEmailCatalogRow["language"]): string {
+  return `${language.language_name_native} (${language.language_code})`
 }
 
 function MetadataRow(props: { label: string; value: string }) {
@@ -103,6 +97,82 @@ function readEditableFieldStatusTextClass(visualState: EditableFieldVisualState)
   }
 
   return "text-sky-700"
+}
+
+function readCatalogColumnDefinitionId(
+  columnDefinition: ColumnDef<DcxAdminEmailCatalogRow, unknown>,
+): string | null {
+  const accessorKey =
+    "accessorKey" in columnDefinition && typeof columnDefinition.accessorKey === "string"
+      ? columnDefinition.accessorKey
+      : null
+
+  if (typeof columnDefinition.id === "string") {
+    return columnDefinition.id
+  }
+
+  return accessorKey
+}
+
+function readCatalogColumnWidthClassName(columnId: string): string {
+  if (columnId === "email_subject") {
+    return "w-[32%]"
+  }
+
+  if (columnId === "email_key") {
+    return "w-[25%]"
+  }
+
+  if (columnId === "language") {
+    return "w-[18%]"
+  }
+
+  if (columnId === "updated_at_ts_ms") {
+    return "w-[15%] whitespace-nowrap"
+  }
+
+  return ""
+}
+
+function readCatalogColumnToggleLabel(columnId: string): string {
+  if (columnId === "email_subject") {
+    return "Subject"
+  }
+
+  if (columnId === "email_key") {
+    return "Key"
+  }
+
+  if (columnId === "language") {
+    return "Language"
+  }
+
+  if (columnId === "updated_at_ts_ms") {
+    return "Updated"
+  }
+
+  return columnId
+}
+
+function DcxAdminSortableHeader(props: {
+  column: {
+    getIsSorted: () => false | "asc" | "desc"
+    toggleSorting: (desc?: boolean) => void
+  }
+  title: string
+}) {
+  const isSorted = props.column.getIsSorted()
+
+  return (
+    <button
+      type="button"
+      onClick={() => props.column.toggleSorting(isSorted === "asc")}
+      className="inline-flex items-center gap-1 text-left"
+    >
+      <span>{props.title}</span>
+      <span className="text-[0.8rem] text-slate-400">{isSorted ? (isSorted === "asc" ? "↑" : "↓") : "↕"}</span>
+    </button>
+  )
 }
 
 function CatalogEmailCard(props: {
@@ -243,10 +313,7 @@ function CatalogEmailCard(props: {
               label="Translation of id"
               value={props.row.translation_of_id ? String(props.row.translation_of_id) : "Not linked"}
             />
-            <MetadataRow
-              label="Updated at"
-              value={formatTimestampLabel(props.row.updated_at_ts_ms)}
-            />
+            <MetadataRow label="Updated at" value={formatTimestampLabel(props.row.updated_at_ts_ms)} />
           </dl>
         </div>
       ) : (
@@ -282,68 +349,66 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
 
   const emails = catalogQuery.data?.data.emails ?? []
   const totalLiveRowCount = catalogQuery.data?.data.total_live_row_count ?? 0
+  const selectedType =
+    props.initialEmailType && props.initialEmailType.trim() !== "" ? props.initialEmailType : "transactional"
 
-  const availableTypes = buildUniqueValues(emails.map((row) => row.email_type))
-  const [selectedType, setSelectedType] = useState("")
+  const [catalogFilterQuery, setCatalogFilterQuery] = useState("")
+  const [catalogSorting, setCatalogSorting] = useState<SortingState>([
+    { id: "updated_at_ts_ms", desc: true },
+  ])
+  const [catalogVisibility, setCatalogVisibility] = useState<VisibilityState>({})
 
-  useEffect(() => {
-    if (availableTypes.length === 0) {
-      setSelectedType("")
-      return
-    }
-
-    if (
-      props.initialEmailType &&
-      availableTypes.includes(props.initialEmailType) &&
-      selectedType !== props.initialEmailType
-    ) {
-      setSelectedType(props.initialEmailType)
-      return
-    }
-
-    if (!availableTypes.includes(selectedType)) {
-      setSelectedType(availableTypes[0])
-    }
-  }, [availableTypes.join("|"), props.initialEmailType, selectedType])
-
-  const typeRows = emails.filter((row) => row.email_type === selectedType)
-  const availableEmailKeys = buildUniqueValues(typeRows.map((row) => row.email_key))
-  const [selectedEmailKey, setSelectedEmailKey] = useState("")
-
-  useEffect(() => {
-    if (availableEmailKeys.length === 0) {
-      setSelectedEmailKey("")
-      return
-    }
-
-    if (!availableEmailKeys.includes(selectedEmailKey)) {
-      setSelectedEmailKey(availableEmailKeys[0])
-    }
-  }, [availableEmailKeys.join("|"), selectedEmailKey])
-
-  const selectedEmailRows = typeRows.filter((row) => row.email_key === selectedEmailKey)
-  const availableLanguageCodes = buildUniqueValues(
-    selectedEmailRows.map((row) => row.language.language_code),
+  const catalogRows = useMemo(
+    () =>
+      emails.filter(
+        (row) => row.email_type === selectedType && row.is_original,
+      ),
+    [emails, selectedType],
   )
-  const [selectedLanguageCode, setSelectedLanguageCode] = useState("")
 
-  useEffect(() => {
-    if (availableLanguageCodes.length === 0) {
-      setSelectedLanguageCode("")
-      return
+  const filteredCatalogRows = useMemo(() => {
+    const normalizedFilterQuery = catalogFilterQuery.trim().toLowerCase()
+
+    if (normalizedFilterQuery === "") {
+      return catalogRows
     }
 
-    if (!availableLanguageCodes.includes(selectedLanguageCode)) {
-      const firstNonOriginalRow = selectedEmailRows.find((row) => row.is_original === false)
-      setSelectedLanguageCode(
-        firstNonOriginalRow?.language.language_code ?? availableLanguageCodes[0],
+    return catalogRows.filter((row) => {
+      const subject = row.email_subject.toLowerCase()
+      const key = row.email_key.toLowerCase()
+      const language = renderLanguageLabel(row.language).toLowerCase()
+
+      return (
+        subject.includes(normalizedFilterQuery) ||
+        key.includes(normalizedFilterQuery) ||
+        language.includes(normalizedFilterQuery)
       )
-    }
-  }, [availableLanguageCodes.join("|"), selectedLanguageCode, selectedEmailRows])
+    })
+  }, [catalogFilterQuery, catalogRows])
+
+  const selectedEmailRows = useMemo(
+    () =>
+      emails.filter(
+        (row) => row.email_type === selectedType && row.email_key === (props.routeEmailKey ?? ""),
+      ),
+    [emails, props.routeEmailKey, selectedType],
+  )
+
+  const availableLanguageRows = useMemo(
+    () =>
+      [...selectedEmailRows].sort((left, right) => {
+        if (left.is_original !== right.is_original) {
+          return left.is_original ? -1 : 1
+        }
+
+        return renderLanguageLabel(left.language).localeCompare(renderLanguageLabel(right.language))
+      }),
+    [selectedEmailRows],
+  )
 
   const originalRow = selectedEmailRows.find((row) => row.is_original) ?? null
   const selectedLanguageRow =
-    selectedEmailRows.find((row) => row.language.language_code === selectedLanguageCode) ?? null
+    selectedEmailRows.find((row) => row.language.language_code === props.routeLanguageCode) ?? originalRow ?? null
 
   const [selectedLanguageDraftSubject, setSelectedLanguageDraftSubject] = useState("")
   const [selectedLanguageDraftBody, setSelectedLanguageDraftBody] = useState("")
@@ -369,7 +434,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
     setSelectedLanguageStatusText(
       "Blue means editable. Click into the selected language email fields to adjust.",
     )
-  }, [selectedType, selectedEmailKey, selectedLanguageCode])
+  }, [selectedType, props.routeEmailKey, props.routeLanguageCode])
 
   useEffect(() => {
     return () => {
@@ -378,6 +443,46 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
       }
     }
   }, [])
+
+  const catalogColumns = useMemo<ColumnDef<DcxAdminEmailCatalogRow, any>[]>(
+    () => [
+      transactionalEmailColumnHelper.accessor("email_subject", {
+        id: "email_subject",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Subject" />,
+        cell: ({ row }) => (
+          <span className="block truncate text-sm font-semibold text-slate-950" title={row.original.email_subject}>
+            {row.original.email_subject}
+          </span>
+        ),
+      }),
+      transactionalEmailColumnHelper.accessor("email_key", {
+        id: "email_key",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Key" />,
+        cell: ({ row }) => (
+          <span className="block truncate font-mono text-xs text-slate-600" title={row.original.email_key}>
+            {row.original.email_key}
+          </span>
+        ),
+      }),
+      transactionalEmailColumnHelper.accessor("language", {
+        id: "language",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Language" />,
+        cell: ({ row }) => <span className="text-sm text-slate-900">{renderLanguageLabel(row.original.language)}</span>,
+        sortingFn: (left, right) =>
+          renderLanguageLabel(left.original.language).localeCompare(renderLanguageLabel(right.original.language)),
+      }),
+      transactionalEmailColumnHelper.accessor("updated_at_ts_ms", {
+        id: "updated_at_ts_ms",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Updated" />,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-sm text-slate-900">
+            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+          </span>
+        ),
+      }),
+    ],
+    [],
+  )
 
   async function saveSelectedLanguageDraftWithRetries(
     targetRow: DcxAdminEmailCatalogRow,
@@ -397,9 +502,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         })
 
         setSelectedLanguageVisualState("saved")
-        setSelectedLanguageStatusText(
-          savePayload.data.was_noop ? "No changes to save." : "Saved.",
-        )
+        setSelectedLanguageStatusText(savePayload.data.was_noop ? "No changes to save." : "Saved.")
 
         if (resetVisualStateTimeoutRef.current) {
           clearTimeout(resetVisualStateTimeoutRef.current)
@@ -431,37 +534,28 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
     }
   }
 
-  return (
-    <section className="flex flex-col gap-6">
-      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-        <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
+  const isCatalogRoute = !props.routeEmailKey || !props.routeLanguageCode
+
+  const catalogContent = (
+    <section className="space-y-6">
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Content
-            </p>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-              Emails
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              Browse one live original email row against one selected language row. The selected
-              language panel is now editable and autosaves into the immutable multilingual
-              email-template model.
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Transactional emails</h2>
+            <p className="text-sm leading-6 text-slate-600">
+              Browse live transactional templates in one catalog, then open one dedicated editor route to compare the original template with one selected language row.
             </p>
           </div>
-          <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
             {totalLiveRowCount} live rows
           </div>
         </div>
 
-        {catalogQuery.isLoading ? (
-          <p className="text-sm text-slate-500">Loading live emails...</p>
-        ) : null}
-
+        {catalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading live emails...</p> : null}
         {catalogQuery.isError ? (
           <div className="space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">
-              Emails read blocked
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">Emails read blocked</p>
             <p className="text-sm leading-6 text-slate-600">
               {(catalogQuery.error as Error & { suggested_action?: string }).message}
             </p>
@@ -473,95 +567,258 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         ) : null}
 
         {!catalogQuery.isLoading && !catalogQuery.isError ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            <LabeledSelect
-              label="Type"
-              value={selectedType}
-              options={availableTypes.map((type) => ({ value: type, label: type }))}
-              onChange={(nextType) => {
-                setSelectedType(nextType)
-                props.onEmailTypeRouteChange?.(nextType)
-              }}
-            />
-            <LabeledSelect
-              label="Email"
-              value={selectedEmailKey}
-              options={availableEmailKeys.map((emailKey) => ({ value: emailKey, label: emailKey }))}
-              onChange={setSelectedEmailKey}
-            />
-            <LabeledSelect
-              label="Language"
-              value={selectedLanguageCode}
-              options={selectedEmailRows.map((row) => ({
-                value: row.language.language_code,
-                label: `${row.language.language_name_native} (${row.language.language_code})`,
-              }))}
-              onChange={setSelectedLanguageCode}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-center lg:justify-between">
+              <Input
+                value={catalogFilterQuery}
+                onChange={(event) => setCatalogFilterQuery(event.target.value)}
+                placeholder="Filter transactional emails..."
+                className="w-full lg:max-w-sm"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="rounded-none">
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {catalogColumns
+                    .map((columnDefinition) => ({
+                      columnId: readCatalogColumnDefinitionId(columnDefinition),
+                      columnDefinition,
+                    }))
+                    .filter(
+                      (
+                        candidate,
+                      ): candidate is {
+                        columnId: string
+                        columnDefinition: ColumnDef<DcxAdminEmailCatalogRow, unknown>
+                      } => candidate.columnId !== null,
+                    )
+                    .map(({ columnId }) => (
+                      <DropdownMenuCheckboxItem
+                        key={columnId}
+                        checked={catalogVisibility[columnId] !== false}
+                        onCheckedChange={(checked) => {
+                          setCatalogVisibility((currentVisibility) => ({
+                            ...currentVisibility,
+                            [columnId]: Boolean(checked),
+                          }))
+                        }}
+                      >
+                        {readCatalogColumnToggleLabel(columnId)}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <DcxAdminDataTable
+              columns={catalogColumns}
+              data={filteredCatalogRows}
+              emptyLabel="No transactional email templates exist yet."
+              sorting={catalogSorting}
+              onSortingChange={setCatalogSorting}
+              columnVisibility={catalogVisibility}
+              onColumnVisibilityChange={setCatalogVisibility}
+              readColumnWidthClassName={readCatalogColumnWidthClassName}
+              onRowClick={(row) =>
+                props.onOpenEmail({
+                  emailKey: row.email_key,
+                  languageCode: row.language.language_code,
+                })
+              }
+              readRowClassName={(row) => (row.email_key === props.routeEmailKey ? "bg-slate-50" : "")}
             />
           </div>
         ) : null}
-      </section>
-
-      {!catalogQuery.isLoading && !catalogQuery.isError ? (
-        <section className="grid gap-6 xl:grid-cols-2">
-          <CatalogEmailCard
-            eyebrow="Original"
-            title={originalRow ? `${originalRow.email_type} / ${originalRow.email_key}` : "Original email row"}
-            row={originalRow}
-            emptyMessage="No live original row exists for this email yet."
-          />
-          <CatalogEmailCard
-            eyebrow="Selected language"
-            title={
-              selectedLanguageRow
-                ? `${selectedLanguageRow.language.language_name_native} (${selectedLanguageRow.language.language_code})`
-                : "Selected language row"
-            }
-            row={selectedLanguageRow}
-            emptyMessage="No live row exists for the selected language yet."
-            editable={selectedLanguageRow !== null}
-            draftSubject={selectedLanguageDraftSubject}
-            draftBody={selectedLanguageDraftBody}
-            visualState={selectedLanguageVisualState}
-            statusText={selectedLanguageStatusText}
-            onFocusField={() => {
-              if (saveEmailMutation.isPending) {
-                return
-              }
-
-              setSelectedLanguageVisualState("editing")
-              setSelectedLanguageStatusText("Editing. Click away to autosave.")
-            }}
-            onChangeSubject={setSelectedLanguageDraftSubject}
-            onChangeBody={setSelectedLanguageDraftBody}
-            onBlurField={() => {
-              if (!selectedLanguageRow || saveEmailMutation.isPending) {
-                return
-              }
-
-              if (
-                selectedLanguageDraftSubject === selectedLanguageRow.email_subject &&
-                selectedLanguageDraftBody === selectedLanguageRow.email_body
-              ) {
-                setSelectedLanguageVisualState("idle")
-                setSelectedLanguageStatusText(
-                  "Blue means editable. Click into the selected language email fields to adjust.",
-                )
-                return
-              }
-
-              setSelectedLanguageVisualState("saving")
-              setSelectedLanguageStatusText("Saving...")
-              void saveSelectedLanguageDraftWithRetries(
-                selectedLanguageRow,
-                selectedLanguageDraftSubject,
-                selectedLanguageDraftBody,
-              )
-            }}
-            isDisabled={saveEmailMutation.isPending}
-          />
-        </section>
-      ) : null}
+      </article>
     </section>
   )
+
+  const editorContent = (
+    <section className="space-y-6">
+      <Button type="button" variant="outline" className="w-fit rounded-none" onClick={props.onReturnToCatalog}>
+        Back to transactional emails
+      </Button>
+
+      <article className="space-y-6 border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
+            <h3 className="text-xl font-semibold tracking-tight text-slate-950">
+              {selectedLanguageRow
+                ? `${selectedLanguageRow.language.language_name_native} transactional email`
+                : "Select a transactional email"}
+            </h3>
+          </div>
+          {selectedLanguageRow ? (
+            <p
+              className={[
+                "text-xs font-medium",
+                readEditableFieldStatusTextClass(selectedLanguageVisualState),
+              ].join(" ")}
+            >
+              {selectedLanguageStatusText}
+            </p>
+          ) : null}
+        </div>
+
+        {catalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading live email detail...</p> : null}
+        {catalogQuery.isError ? (
+          <p className="text-sm text-red-600">
+            {(catalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
+              (catalogQuery.error as Error).message}
+          </p>
+        ) : null}
+
+        {!catalogQuery.isLoading && !catalogQuery.isError && selectedLanguageRow ? (
+          <div className="space-y-6">
+            <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Language rows</p>
+                <h4 className="text-lg font-semibold tracking-tight text-slate-950">Available translations</h4>
+                <p className="text-sm leading-6 text-slate-600">
+                  Open another live language row here when you want to compare or edit a different transactional template translation.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {availableLanguageRows.map((row) => (
+                  <button
+                    key={row.email_id}
+                    type="button"
+                    onClick={() =>
+                      props.onOpenEmail({
+                        emailKey: row.email_key,
+                        languageCode: row.language.language_code,
+                      })
+                    }
+                    className={[
+                      "border px-4 py-2 text-sm font-medium transition",
+                      row.email_id === selectedLanguageRow.email_id
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
+                    ].join(" ")}
+                  >
+                    {row.language.language_name_native}
+                    {row.is_original ? " · original" : ""}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {originalRow && selectedLanguageRow.email_id !== originalRow.email_id ? (
+              <section className="grid gap-6 xl:grid-cols-2">
+                <CatalogEmailCard
+                  eyebrow="Original"
+                  title={`${originalRow.email_type} / ${originalRow.email_key}`}
+                  row={originalRow}
+                  emptyMessage="No live original row exists for this email yet."
+                />
+                <CatalogEmailCard
+                  eyebrow="Selected language"
+                  title={`${selectedLanguageRow.language.language_name_native} (${selectedLanguageRow.language.language_code})`}
+                  row={selectedLanguageRow}
+                  emptyMessage="No live row exists for the selected language yet."
+                  editable
+                  draftSubject={selectedLanguageDraftSubject}
+                  draftBody={selectedLanguageDraftBody}
+                  visualState={selectedLanguageVisualState}
+                  statusText={selectedLanguageStatusText}
+                  onFocusField={() => {
+                    if (saveEmailMutation.isPending) {
+                      return
+                    }
+
+                    setSelectedLanguageVisualState("editing")
+                    setSelectedLanguageStatusText("Editing. Click away to autosave.")
+                  }}
+                  onChangeSubject={setSelectedLanguageDraftSubject}
+                  onChangeBody={setSelectedLanguageDraftBody}
+                  onBlurField={() => {
+                    if (!selectedLanguageRow || saveEmailMutation.isPending) {
+                      return
+                    }
+
+                    if (
+                      selectedLanguageDraftSubject === selectedLanguageRow.email_subject &&
+                      selectedLanguageDraftBody === selectedLanguageRow.email_body
+                    ) {
+                      setSelectedLanguageVisualState("idle")
+                      setSelectedLanguageStatusText(
+                        "Blue means editable. Click into the selected language email fields to adjust.",
+                      )
+                      return
+                    }
+
+                    setSelectedLanguageVisualState("saving")
+                    setSelectedLanguageStatusText("Saving...")
+                    void saveSelectedLanguageDraftWithRetries(
+                      selectedLanguageRow,
+                      selectedLanguageDraftSubject,
+                      selectedLanguageDraftBody,
+                    )
+                  }}
+                  isDisabled={saveEmailMutation.isPending}
+                />
+              </section>
+            ) : (
+              <CatalogEmailCard
+                eyebrow="Template"
+                title={`${selectedLanguageRow.email_type} / ${selectedLanguageRow.email_key}`}
+                row={selectedLanguageRow}
+                emptyMessage="No live row exists for the selected language yet."
+                editable
+                draftSubject={selectedLanguageDraftSubject}
+                draftBody={selectedLanguageDraftBody}
+                visualState={selectedLanguageVisualState}
+                statusText={selectedLanguageStatusText}
+                onFocusField={() => {
+                  if (saveEmailMutation.isPending) {
+                    return
+                  }
+
+                  setSelectedLanguageVisualState("editing")
+                  setSelectedLanguageStatusText("Editing. Click away to autosave.")
+                }}
+                onChangeSubject={setSelectedLanguageDraftSubject}
+                onChangeBody={setSelectedLanguageDraftBody}
+                onBlurField={() => {
+                  if (!selectedLanguageRow || saveEmailMutation.isPending) {
+                    return
+                  }
+
+                  if (
+                    selectedLanguageDraftSubject === selectedLanguageRow.email_subject &&
+                    selectedLanguageDraftBody === selectedLanguageRow.email_body
+                  ) {
+                    setSelectedLanguageVisualState("idle")
+                    setSelectedLanguageStatusText(
+                      "Blue means editable. Click into the selected language email fields to adjust.",
+                    )
+                    return
+                  }
+
+                  setSelectedLanguageVisualState("saving")
+                  setSelectedLanguageStatusText("Saving...")
+                  void saveSelectedLanguageDraftWithRetries(
+                    selectedLanguageRow,
+                    selectedLanguageDraftSubject,
+                    selectedLanguageDraftBody,
+                  )
+                }}
+                isDisabled={saveEmailMutation.isPending}
+              />
+            )}
+          </div>
+        ) : null}
+      </article>
+    </section>
+  )
+
+  if (isCatalogRoute) {
+    return catalogContent
+  }
+
+  return editorContent
 }

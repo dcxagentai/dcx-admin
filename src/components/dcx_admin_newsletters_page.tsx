@@ -1,11 +1,17 @@
 /**
  * CONTEXT:
  * First admin newsletters surface for the DCX internal frontend.
- * It exists to let internal users create and edit newsletter content drafts using the same
- * immutable multilingual email model as the existing transactional templates.
+ * It exists to let internal users browse newsletter drafts in one table-driven catalog,
+ * then open one dedicated full-width editor route for the selected newsletter.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table"
 
 import {
   readDcxAdminNewslettersCatalog,
@@ -33,6 +39,14 @@ import {
 } from "../lib/dcx_admin_editable_field_visuals"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
 import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
@@ -40,12 +54,16 @@ type Props = {
   routeEmailKey: string | null
   routeLanguageCode: string | null
   onOpenNewsletter: (params: { emailKey: string; languageCode: string }) => void
+  onReturnToCatalog: () => void
 }
+
+const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
     return "Not set"
   }
+
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(timestampMs),
   )
@@ -55,6 +73,7 @@ function buildDateTimeLocalInputValue(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
     return ""
   }
+
   const candidateDate = new Date(timestampMs)
   const pad = (value: number) => value.toString().padStart(2, "0")
   return `${candidateDate.getFullYear()}-${pad(candidateDate.getMonth() + 1)}-${pad(candidateDate.getDate())}T${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
@@ -64,10 +83,12 @@ function readTimestampFromDateTimeLocalInput(value: string): number | null {
   if (value.trim() === "") {
     return null
   }
+
   const parsedDate = new Date(value)
   if (Number.isNaN(parsedDate.getTime())) {
     return null
   }
+
   return parsedDate.getTime()
 }
 
@@ -82,6 +103,86 @@ function buildDraftSnapshot(draft: { email_subject: string; email_body: string }
   return JSON.stringify(draft)
 }
 
+function renderLanguageLabel(language: DcxAdminNewsletterCatalogRow["language"]): string {
+  return `${language.language_name_native} (${language.language_code})`
+}
+
+function readCatalogColumnDefinitionId(
+  columnDefinition: ColumnDef<DcxAdminNewsletterCatalogRow, unknown>,
+): string | null {
+  const accessorKey =
+    "accessorKey" in columnDefinition && typeof columnDefinition.accessorKey === "string"
+      ? columnDefinition.accessorKey
+      : null
+
+  if (typeof columnDefinition.id === "string") {
+    return columnDefinition.id
+  }
+
+  return accessorKey
+}
+
+function readCatalogColumnWidthClassName(columnId: string): string {
+  if (columnId === "email_subject") {
+    return "w-[30%]"
+  }
+
+  if (columnId === "email_key") {
+    return "w-[25%]"
+  }
+
+  if (columnId === "language") {
+    return "w-[18%]"
+  }
+
+  if (columnId === "updated_at_ts_ms") {
+    return "w-[17%] whitespace-nowrap"
+  }
+
+  return ""
+}
+
+function readCatalogColumnToggleLabel(columnId: string): string {
+  if (columnId === "email_subject") {
+    return "Subject"
+  }
+
+  if (columnId === "email_key") {
+    return "Key"
+  }
+
+  if (columnId === "language") {
+    return "Language"
+  }
+
+  if (columnId === "updated_at_ts_ms") {
+    return "Updated"
+  }
+
+  return columnId
+}
+
+function DcxAdminSortableHeader(props: {
+  column: {
+    getIsSorted: () => false | "asc" | "desc"
+    toggleSorting: (desc?: boolean) => void
+  }
+  title: string
+}) {
+  const isSorted = props.column.getIsSorted()
+
+  return (
+    <button
+      type="button"
+      onClick={() => props.column.toggleSorting(isSorted === "asc")}
+      className="inline-flex items-center gap-1 text-left"
+    >
+      <span>{props.title}</span>
+      <span className="text-[0.8rem] text-slate-400">{isSorted ? (isSorted === "asc" ? "↑" : "↓") : "↕"}</span>
+    </button>
+  )
+}
+
 function MetadataRow(props: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-black/5 py-3 last:border-b-0">
@@ -93,40 +194,13 @@ function MetadataRow(props: { label: string; value: string }) {
   )
 }
 
-function NewsletterRow(props: {
-  row: DcxAdminNewsletterCatalogRow
-  isSelected: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={props.onClick}
-      className={[
-        "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
-        props.isSelected
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
-      ].join(" ")}
-    >
-      <p className="text-base font-semibold tracking-tight">{props.row.email_subject}</p>
-      <p className={props.isSelected ? "text-sm text-white/70" : "text-sm text-slate-600"}>
-        {props.row.email_key}
-      </p>
-      <p className={props.isSelected ? "text-xs text-white/60" : "text-xs text-slate-500"}>
-        Updated {formatTimestampLabel(props.row.updated_at_ts_ms)}
-      </p>
-    </button>
-  )
-}
-
 function NewsletterSendRow(props: {
   row: DcxAdminNewsletterSendCatalogRow
   onCancel: () => void
   cancelDisabled: boolean
 }) {
   return (
-        <div className="border border-black/6 bg-white px-4 py-4">
+    <div className="border border-black/6 bg-white px-4 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-slate-950">
@@ -279,13 +353,20 @@ export function DcxAdminNewslettersPage(props: Props) {
   const detail = detailQuery.data?.data ?? null
   const preparedSends = sendsCatalogQuery.data?.data.newsletter_sends ?? []
   const [newNewsletterSubject, setNewNewsletterSubject] = useState("")
-  const [editorDraft, setEditorDraft] = useState<{ email_subject: string; email_body: string } | null>(null)
+  const [editorDraft, setEditorDraft] = useState<{ email_subject: string; email_body: string } | null>(
+    null,
+  )
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
   const [scheduledSendInput, setScheduledSendInput] = useState("")
   const [sendStatusText, setSendStatusText] = useState(
     "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
   )
+  const [catalogFilterQuery, setCatalogFilterQuery] = useState("")
+  const [catalogSorting, setCatalogSorting] = useState<SortingState>([
+    { id: "updated_at_ts_ms", desc: true },
+  ])
+  const [catalogVisibility, setCatalogVisibility] = useState<VisibilityState>({})
 
   useEffect(() => {
     if (!detail) {
@@ -308,28 +389,60 @@ export function DcxAdminNewslettersPage(props: Props) {
     if (!detail) {
       return
     }
+
     setScheduledSendInput(buildDateTimeLocalInputValue(Date.now() + 60 * 60 * 1000))
     if ((detail.language_readiness.total_blocked_missing_translation_count ?? 0) > 0) {
       setSendStatusText(
         `This newsletter still needs translations before sending. ${detail.language_readiness.total_blocked_missing_translation_count} eligible recipients are currently blocked by missing language coverage.`,
       )
-    } else {
-      setSendStatusText(
-        "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
-      )
+      return
     }
+
+    setSendStatusText(
+      "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
+    )
   }, [detail?.email_id])
 
   useEffect(() => {
     return () => {
-      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
-      if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current)
+      }
+      if (resetStateTimeoutRef.current) {
+        clearTimeout(resetStateTimeoutRef.current)
+      }
     }
   }, [])
 
+  const catalogRows = useMemo(
+    () => newsletters.filter((newsletter) => newsletter.is_original),
+    [newsletters],
+  )
+
+  const filteredNewsletters = useMemo(() => {
+    const normalizedFilterQuery = catalogFilterQuery.trim().toLowerCase()
+
+    if (normalizedFilterQuery === "") {
+      return catalogRows
+    }
+
+    return catalogRows.filter((newsletter) => {
+      const subject = newsletter.email_subject.toLowerCase()
+      const key = newsletter.email_key.toLowerCase()
+      const language = renderLanguageLabel(newsletter.language).toLowerCase()
+
+      return (
+        subject.includes(normalizedFilterQuery) ||
+        key.includes(normalizedFilterQuery) ||
+        language.includes(normalizedFilterQuery)
+      )
+    })
+  }, [catalogFilterQuery, catalogRows])
+
   const draftSnapshot = editorDraft ? buildDraftSnapshot(editorDraft) : ""
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
-  const isAnyWritePending = createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
+  const isAnyWritePending =
+    createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
   const scheduledSendAtTsMs = readTimestampFromDateTimeLocalInput(scheduledSendInput)
   const isSendMutationPending = prepareSendMutation.isPending || cancelSendMutation.isPending
   const hasMissingNewsletterLanguagesForEligibleUsers =
@@ -340,15 +453,53 @@ export function DcxAdminNewslettersPage(props: Props) {
     !isAnyWritePending &&
     !isSendMutationPending &&
     !hasMissingNewsletterLanguagesForEligibleUsers
-  const selectedNewsletterIds = useMemo(
-    () => new Set(props.routeEmailKey ? [props.routeEmailKey] : []),
-    [props.routeEmailKey],
+  const isCatalogRoute = !props.routeEmailKey || !props.routeLanguageCode
+
+  const catalogColumns = useMemo<ColumnDef<DcxAdminNewsletterCatalogRow, any>[]>(
+    () => [
+      newsletterColumnHelper.accessor("email_subject", {
+        id: "email_subject",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Subject" />,
+        cell: ({ row }) => (
+          <span className="block truncate text-sm font-semibold text-slate-950" title={row.original.email_subject}>
+            {row.original.email_subject}
+          </span>
+        ),
+      }),
+      newsletterColumnHelper.accessor("email_key", {
+        id: "email_key",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Key" />,
+        cell: ({ row }) => (
+          <span className="block truncate font-mono text-xs text-slate-600" title={row.original.email_key}>
+            {row.original.email_key}
+          </span>
+        ),
+      }),
+      newsletterColumnHelper.accessor("language", {
+        id: "language",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Language" />,
+        cell: ({ row }) => <span className="text-sm text-slate-900">{renderLanguageLabel(row.original.language)}</span>,
+        sortingFn: (left, right) =>
+          renderLanguageLabel(left.original.language).localeCompare(renderLanguageLabel(right.original.language)),
+      }),
+      newsletterColumnHelper.accessor("updated_at_ts_ms", {
+        id: "updated_at_ts_ms",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Updated" />,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-sm text-slate-900">
+            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+          </span>
+        ),
+      }),
+    ],
+    [],
   )
 
   async function persistCurrentDraft(): Promise<void> {
     if (!detail || !editorDraft || !isDirty) {
       return
     }
+
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current)
       autosaveTimeoutRef.current = null
@@ -362,11 +513,13 @@ export function DcxAdminNewslettersPage(props: Props) {
         emailBody: editorDraft.email_body,
       })
       setVisualState("saved")
-      if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
+      if (resetStateTimeoutRef.current) {
+        clearTimeout(resetStateTimeoutRef.current)
+      }
       resetStateTimeoutRef.current = setTimeout(() => {
         setVisualState("idle")
       }, DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS)
-    } catch (error) {
+    } catch {
       setVisualState("error")
     }
   }
@@ -378,7 +531,10 @@ export function DcxAdminNewslettersPage(props: Props) {
 
     setVisualState("editing")
 
-    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current)
+    }
+
     autosaveTimeoutRef.current = setTimeout(() => {
       void persistCurrentDraft()
     }, 30000)
@@ -403,6 +559,7 @@ export function DcxAdminNewslettersPage(props: Props) {
       setSendStatusText("Choose one valid date and time before preparing a scheduled send.")
       return
     }
+
     try {
       const payload = await prepareSendMutation.mutateAsync({
         scheduledSendAtTsMs,
@@ -421,9 +578,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   async function handleCancelPreparedSend(emailSendId: number) {
     try {
       const payload = await cancelSendMutation.mutateAsync({ emailSendId })
-      setSendStatusText(
-        `Prepared send ${payload.data.email_send_id} is now ${payload.data.send_status}.`,
-      )
+      setSendStatusText(`Prepared send ${payload.data.email_send_id} is now ${payload.data.send_status}.`)
     } catch (error) {
       setSendStatusText(
         (error as Error & { suggested_action?: string }).suggested_action ??
@@ -432,89 +587,143 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
   }
 
-  return (
-    <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
-      <section className="space-y-6">
-        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-          <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Newsletters</h2>
-            <p className="text-sm leading-6 text-slate-600">
-              Compose newsletter content drafts in English first, with the same translation-ready immutable model already used by transactional email templates.
-            </p>
-          </div>
+  const catalogContent = (
+    <section className="space-y-6">
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Newsletters</h2>
+          <p className="text-sm leading-6 text-slate-600">
+            Create newsletter drafts, browse the catalog in one place, then open a dedicated editor route for each newsletter.
+          </p>
+        </div>
 
-          <div className="space-y-3 border border-black/6 bg-slate-50 px-4 py-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              New newsletter
-            </p>
-            <input
-              value={newNewsletterSubject}
-              onChange={(event) => setNewNewsletterSubject(event.target.value)}
-              placeholder="Newsletter subject"
-              className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
-            />
-            <Button
-              type="button"
-              onClick={() =>
-                createDraftMutation.mutate({
-                  emailSubject: newNewsletterSubject,
-                  languageCode: "en",
-                })
-              }
-              disabled={createDraftMutation.isPending || newNewsletterSubject.trim() === ""}
-              className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
-            >
-              {createDraftMutation.isPending ? "Creating newsletter..." : "New newsletter"}
-            </Button>
-            {createDraftMutation.isError ? (
-              <p className="text-sm text-red-600">
-                {(createDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (createDraftMutation.error as Error).message}
-              </p>
-            ) : null}
-          </div>
-        </article>
-
-        <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-          <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog</p>
-              <h3 className="text-xl font-semibold tracking-tight text-slate-950">Existing newsletters</h3>
-            </div>
-            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-              {catalogQuery.data?.data.total_live_row_count ?? 0} live rows
-            </div>
-          </div>
-
-          {catalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading newsletters...</p> : null}
-          {catalogQuery.isError ? (
+        <div className="space-y-3 border border-black/6 bg-slate-50 px-4 py-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">New newsletter</p>
+          <input
+            value={newNewsletterSubject}
+            onChange={(event) => setNewNewsletterSubject(event.target.value)}
+            placeholder="Newsletter subject"
+            className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+          />
+          <Button
+            type="button"
+            onClick={() =>
+              createDraftMutation.mutate({
+                emailSubject: newNewsletterSubject,
+                languageCode: "en",
+              })
+            }
+            disabled={createDraftMutation.isPending || newNewsletterSubject.trim() === ""}
+            className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
+          >
+            {createDraftMutation.isPending ? "Creating newsletter..." : "New newsletter"}
+          </Button>
+          {createDraftMutation.isError ? (
             <p className="text-sm text-red-600">
-              {(catalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
-                (catalogQuery.error as Error).message}
+              {(createDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                (createDraftMutation.error as Error).message}
             </p>
           ) : null}
+        </div>
+      </article>
 
-          <div className="space-y-3">
-            {newsletters.map((newsletter) => (
-              <NewsletterRow
-                key={newsletter.email_id}
-                row={newsletter}
-                isSelected={selectedNewsletterIds.has(newsletter.email_key)}
-                onClick={() =>
-                  props.onOpenNewsletter({
-                    emailKey: newsletter.email_key,
-                    languageCode: newsletter.language.language_code,
-                  })
-                }
-              />
-            ))}
-            {newsletters.length === 0 && !catalogQuery.isLoading ? (
-              <p className="text-sm text-slate-500">No newsletters exist yet.</p>
-            ) : null}
+      <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+        <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog</p>
+            <h3 className="text-xl font-semibold tracking-tight text-slate-950">Existing newsletters</h3>
           </div>
-        </article>
-      </section>
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+            {catalogRows.length} live rows
+          </div>
+        </div>
+
+        {catalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading newsletters...</p> : null}
+        {catalogQuery.isError ? (
+          <p className="text-sm text-red-600">
+            {(catalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
+              (catalogQuery.error as Error).message}
+          </p>
+        ) : null}
+
+        {!catalogQuery.isLoading && !catalogQuery.isError ? (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-center lg:justify-between">
+              <Input
+                value={catalogFilterQuery}
+                onChange={(event) => setCatalogFilterQuery(event.target.value)}
+                placeholder="Filter newsletters..."
+                className="w-full lg:max-w-sm"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="rounded-none">
+                    Columns
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {catalogColumns
+                    .map((columnDefinition) => ({
+                      columnId: readCatalogColumnDefinitionId(columnDefinition),
+                      columnDefinition,
+                    }))
+                    .filter(
+                      (
+                        candidate,
+                      ): candidate is {
+                        columnId: string
+                        columnDefinition: ColumnDef<DcxAdminNewsletterCatalogRow, unknown>
+                      } => candidate.columnId !== null,
+                    )
+                    .map(({ columnId }) => (
+                      <DropdownMenuCheckboxItem
+                        key={columnId}
+                        checked={catalogVisibility[columnId] !== false}
+                        onCheckedChange={(checked) => {
+                          setCatalogVisibility((currentVisibility) => ({
+                            ...currentVisibility,
+                            [columnId]: Boolean(checked),
+                          }))
+                        }}
+                      >
+                        {readCatalogColumnToggleLabel(columnId)}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <DcxAdminDataTable
+              columns={catalogColumns}
+              data={filteredNewsletters}
+              emptyLabel="No newsletters exist yet."
+              sorting={catalogSorting}
+              onSortingChange={setCatalogSorting}
+              columnVisibility={catalogVisibility}
+              onColumnVisibilityChange={setCatalogVisibility}
+              readColumnWidthClassName={readCatalogColumnWidthClassName}
+              onRowClick={(newsletter) =>
+                props.onOpenNewsletter({
+                  emailKey: newsletter.email_key,
+                  languageCode: newsletter.language.language_code,
+                })
+              }
+              readRowClassName={(newsletter) =>
+                newsletter.email_key === props.routeEmailKey ? "bg-slate-50" : ""
+              }
+            />
+          </div>
+        ) : null}
+      </article>
+    </section>
+  )
+
+  const editorContent = (
+    <section className="space-y-6">
+      <Button type="button" variant="outline" className="w-fit rounded-none" onClick={props.onReturnToCatalog}>
+        Back to newsletters
+      </Button>
 
       <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
@@ -525,9 +734,20 @@ export function DcxAdminNewslettersPage(props: Props) {
             </h3>
           </div>
           {detail ? (
-            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-            </p>
+            <div className="flex flex-col items-end gap-3">
+              <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+              </p>
+              <Button
+                type="button"
+                onClick={() => void persistCurrentDraft()}
+                disabled={!isDirty || isAnyWritePending}
+                variant="outline"
+                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
+              >
+                {saveMutation.isPending ? "Saving..." : "Save newsletter"}
+              </Button>
+            </div>
           ) : null}
         </div>
 
@@ -549,15 +769,40 @@ export function DcxAdminNewslettersPage(props: Props) {
               <input
                 value={editorDraft.email_subject}
                 onChange={(event) => setEditorDraft({ ...editorDraft, email_subject: event.target.value })}
-                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+                className={[
+                  "h-12 w-full border bg-slate-50 px-4 text-base outline-none",
+                  readDcxAdminEditableFieldBorderClass(visualState),
+                ].join(" ")}
               />
             </label>
 
+            <div className="grid gap-4 xl:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
+                <Textarea
+                  value={editorDraft.email_body}
+                  onChange={(event) => setEditorDraft({ ...editorDraft, email_body: event.target.value })}
+                  rows={18}
+                  className={[
+                    "min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none",
+                    readDcxAdminEditableFieldBorderClass(visualState),
+                  ].join(" ")}
+                />
+              </label>
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
+                <div
+                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
+                  dangerouslySetInnerHTML={{
+                    __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
+                  }}
+                />
+              </div>
+            </div>
+
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Translations
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Translations</p>
                 <h4 className="text-lg font-semibold tracking-tight text-slate-950">
                   Existing and missing language rows
                 </h4>
@@ -592,9 +837,7 @@ export function DcxAdminNewslettersPage(props: Props) {
 
               {detail.translation_summary.missing_languages.length > 0 ? (
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Missing languages
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Missing languages</p>
                   <div className="flex flex-wrap gap-3">
                     {detail.translation_summary.missing_languages.map((language) => (
                       <Button
@@ -609,9 +852,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                         variant="outline"
                         className="rounded-none border-slate-200 bg-white px-4 py-2 text-slate-700 hover:border-slate-300 hover:text-slate-950"
                       >
-                        {createTranslationMutation.isPending
-                          ? "Creating..."
-                          : `Create ${language.language_name_native}`}
+                        {createTranslationMutation.isPending ? "Creating..." : `Create ${language.language_name_native}`}
                       </Button>
                     ))}
                   </div>
@@ -630,48 +871,11 @@ export function DcxAdminNewslettersPage(props: Props) {
               ) : null}
             </section>
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
-                <Textarea
-                  value={editorDraft.email_body}
-                  onChange={(event) => setEditorDraft({ ...editorDraft, email_body: event.target.value })}
-                  rows={18}
-                  className={["min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-                />
-              </label>
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
-                <div
-                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
-                  dangerouslySetInnerHTML={{
-                    __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                onClick={() => void persistCurrentDraft()}
-                disabled={!isDirty || isAnyWritePending}
-                variant="outline"
-                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save newsletter"}
-              </Button>
-            </div>
-
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Send preparation
-                  </p>
-                  <h4 className="text-lg font-semibold tracking-tight text-slate-950">
-                    Prepare newsletter sends
-                  </h4>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Send preparation</p>
+                  <h4 className="text-lg font-semibold tracking-tight text-slate-950">Prepare newsletter sends</h4>
                 </div>
                 <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                   {sendsCatalogQuery.data?.data.total_send_count ?? 0} prepared sends
@@ -682,9 +886,7 @@ export function DcxAdminNewslettersPage(props: Props) {
 
               <div className="border border-black/6 bg-white px-4 py-4">
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Language readiness
-                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Language readiness</p>
                   <p className="text-sm leading-6 text-slate-600">
                     Newsletters only prepare send candidates when a live translation exists in the user’s preferred language. Transactional fallback-to-English does not apply here.
                   </p>
@@ -714,15 +916,13 @@ export function DcxAdminNewslettersPage(props: Props) {
                             : "border border-amber-200 bg-amber-50 text-amber-700",
                         ].join(" ")}
                       >
-                        {row.has_live_translation
-                          ? "translation ready"
-                          : `${row.blocked_missing_translation_count} blocked`}
+                        {row.has_live_translation ? "translation ready" : `${row.blocked_missing_translation_count} blocked`}
                       </div>
                     </div>
                   ))}
                 </div>
                 {detail.language_readiness.missing_languages.length > 0 ? (
-                    <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     This newsletter still needs live translations in{" "}
                     {detail.language_readiness.missing_languages
                       .map((language) => language.language_name_native)
@@ -758,9 +958,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                 </Button>
               </div>
 
-              {sendsCatalogQuery.isLoading ? (
-                <p className="text-sm text-slate-500">Loading prepared sends...</p>
-              ) : null}
+              {sendsCatalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading prepared sends...</p> : null}
               {sendsCatalogQuery.isError ? (
                 <p className="text-sm text-red-600">
                   {(sendsCatalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
@@ -778,19 +976,14 @@ export function DcxAdminNewslettersPage(props: Props) {
                   />
                 ))}
                 {preparedSends.length === 0 && !sendsCatalogQuery.isLoading ? (
-                  <p className="text-sm text-slate-500">
-                    No prepared sends exist for this newsletter yet.
-                  </p>
+                  <p className="text-sm text-slate-500">No prepared sends exist for this newsletter yet.</p>
                 ) : null}
               </div>
             </section>
 
             <dl>
               <MetadataRow label="Email key" value={detail.email_key} />
-              <MetadataRow
-                label="Language"
-                value={`${detail.language.language_name_native} (${detail.language.language_code})`}
-              />
+              <MetadataRow label="Language" value={`${detail.language.language_name_native} (${detail.language.language_code})`} />
               <MetadataRow label="Updated at" value={formatTimestampLabel(detail.updated_at_ts_ms)} />
             </dl>
           </div>
@@ -798,4 +991,10 @@ export function DcxAdminNewslettersPage(props: Props) {
       </article>
     </section>
   )
+
+  if (isCatalogRoute) {
+    return catalogContent
+  }
+
+  return editorContent
 }
