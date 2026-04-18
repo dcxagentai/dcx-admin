@@ -4,14 +4,24 @@
  * It exists to prove the admin surface can render real management data in a compact,
  * premium interface before editing, roles, and broader admin navigation exist.
  */
+import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
+  type SortingState,
+  type ColumnDef,
+  type VisibilityState,
 } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 import {
   readDcxAdminUsersList,
@@ -20,6 +30,29 @@ import {
 
 type Props = {
   apiBaseUrl: string
+}
+
+function DcxAdminSortableHeader(props: {
+  title: string
+  canSort: boolean
+  sortDirection: false | "asc" | "desc"
+  onToggleSort: () => void
+}) {
+  if (!props.canSort) {
+    return props.title
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className="-ml-3 h-8 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:bg-slate-100"
+      onClick={props.onToggleSort}
+    >
+      {props.title}
+      <ArrowUpDownIcon className="size-3.5" />
+    </Button>
+  )
 }
 
 function formatTimestampLabel(timestampMs: number | null): string {
@@ -39,18 +72,6 @@ function renderLanguageLabel(user: DcxAdminUserListRow): string {
   }
 
   return `${user.preferred_language.language_name_native} (${user.preferred_language.language_code})`
-}
-
-function buildConfirmedUserCount(users: DcxAdminUserListRow[]): number {
-  return users.filter((user) => user.primary_email_confirmed).length
-}
-
-function buildLanguageCount(users: DcxAdminUserListRow[]): number {
-  return new Set(
-    users
-      .map((user) => user.preferred_language?.language_code ?? null)
-      .filter((languageCode): languageCode is string => languageCode !== null),
-  ).size
 }
 
 function normalizeDcxAdminDirectoryRole(userRole: string | null | undefined): "dev" | "admin" | "user" {
@@ -75,7 +96,7 @@ function buildDcxAdminDirectoryGroups(users: DcxAdminUserListRow[]) {
 
 function readDcxAdminDirectoryColumnWidthClass(columnId: string): string {
   if (columnId === "primary_email_value") {
-    return "w-[18rem]"
+    return "w-[14rem]"
   }
 
   if (columnId === "primary_email_status" || columnId === "primary_phone_status") {
@@ -83,15 +104,15 @@ function readDcxAdminDirectoryColumnWidthClass(columnId: string): string {
   }
 
   if (columnId === "language") {
-    return "w-[11rem]"
+    return "w-[10rem]"
   }
 
   if (columnId === "last_seen" || columnId === "created") {
-    return "w-[12rem]"
+    return "w-[9rem]"
   }
 
   if (columnId === "uuid") {
-    return "w-[16rem]"
+    return "w-[11rem]"
   }
 
   return ""
@@ -135,10 +156,18 @@ function renderContactStatusCell(params: {
 
 const dcxAdminDirectoryColumnHelper = createColumnHelper<DcxAdminUserListRow>()
 
-const dcxAdminDirectoryColumns = [
+const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
   dcxAdminDirectoryColumnHelper.accessor("primary_email", {
     id: "primary_email_value",
-    header: "Email",
+    enableHiding: false,
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Email"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
     cell: (cellContext) => (
       <div className="space-y-1">
         <p
@@ -156,6 +185,7 @@ const dcxAdminDirectoryColumns = [
   dcxAdminDirectoryColumnHelper.display({
     id: "primary_email_status",
     header: "Email",
+    enableHiding: false,
     cell: (cellContext) =>
       renderContactStatusCell({
         heading: "email",
@@ -166,6 +196,7 @@ const dcxAdminDirectoryColumns = [
   dcxAdminDirectoryColumnHelper.display({
     id: "primary_phone_status",
     header: "Phone",
+    enableHiding: false,
     cell: (cellContext) =>
       renderContactStatusCell({
         heading: "phone",
@@ -175,18 +206,46 @@ const dcxAdminDirectoryColumns = [
   }),
   dcxAdminDirectoryColumnHelper.display({
     id: "language",
-    header: "Language",
+    enableSorting: true,
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Language"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
+    sortingFn: (rowA, rowB) =>
+      renderLanguageLabel(rowA.original).localeCompare(renderLanguageLabel(rowB.original)),
     cell: (cellContext) => renderLanguageLabel(cellContext.row.original),
   }),
   dcxAdminDirectoryColumnHelper.accessor("last_seen_at_ts_ms", {
     id: "last_seen",
-    header: "Last seen",
-    cell: (cellContext) => formatTimestampLabel(cellContext.getValue()),
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Last seen"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
+    cell: (cellContext) => (
+      <span className="block whitespace-nowrap">{formatTimestampLabel(cellContext.getValue())}</span>
+    ),
   }),
   dcxAdminDirectoryColumnHelper.accessor("created_at_ts_ms", {
     id: "created",
-    header: "Created",
-    cell: (cellContext) => formatTimestampLabel(cellContext.getValue()),
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Created"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
+    cell: (cellContext) => (
+      <span className="block whitespace-nowrap">{formatTimestampLabel(cellContext.getValue())}</span>
+    ),
   }),
   dcxAdminDirectoryColumnHelper.accessor("user_uuid", {
     id: "uuid",
@@ -203,13 +262,15 @@ function DcxAdminUsersDirectoryTableSection(props: {
   title: string
   users: DcxAdminUserListRow[]
   emptyLabel: string
+  sorting: SortingState
+  onSortingChange: (nextValue: SortingState | ((old: SortingState) => SortingState)) => void
+  columnVisibility: VisibilityState
+  onColumnVisibilityChange: (
+    nextValue:
+      | VisibilityState
+      | ((old: VisibilityState) => VisibilityState),
+  ) => void
 }) {
-  const table = useReactTable({
-    data: props.users,
-    columns: dcxAdminDirectoryColumns,
-    getCoreRowModel: getCoreRowModel(),
-  })
-
   return (
     <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
       <div className="border-b border-black/6 px-6 py-5">
@@ -217,51 +278,27 @@ function DcxAdminUsersDirectoryTableSection(props: {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full table-fixed border-collapse">
-          <thead className="bg-slate-50/80">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="text-left">
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className={`px-6 py-4 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500 ${readDcxAdminDirectoryColumnWidthClass(header.column.id)}`}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row, rowIndex) => (
-              <tr
-                key={row.id}
-                className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className={`px-6 py-4 align-top text-sm text-slate-900 ${readDcxAdminDirectoryColumnWidthClass(cell.column.id)}`}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {props.users.length === 0 ? (
-          <div className="px-6 py-10 text-sm text-slate-500">{props.emptyLabel}</div>
-        ) : null}
+        <DcxAdminDataTable
+          columns={dcxAdminDirectoryColumns}
+          data={props.users}
+          emptyLabel={props.emptyLabel}
+          readColumnWidthClassName={readDcxAdminDirectoryColumnWidthClass}
+          sorting={props.sorting}
+          onSortingChange={props.onSortingChange}
+          columnVisibility={props.columnVisibility}
+          onColumnVisibilityChange={props.onColumnVisibilityChange}
+        />
       </div>
     </section>
   )
 }
 
 export function DcxAdminUsersListPage(props: Props) {
+  const [emailFilterValue, setEmailFilterValue] = useState("")
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    uuid: false,
+  })
   const usersListQuery = useQuery({
     queryKey: ["dcx_admin_users_list"],
     queryFn: async () =>
@@ -271,48 +308,26 @@ export function DcxAdminUsersListPage(props: Props) {
   })
 
   const users = usersListQuery.data?.data.users ?? []
-  const totalUserCount = usersListQuery.data?.data.total_user_count ?? 0
-  const confirmedUserCount = buildConfirmedUserCount(users)
-  const languageCount = buildLanguageCount(users)
-  const groupedUsers = buildDcxAdminDirectoryGroups(users)
+  const filteredUsers = useMemo(() => {
+    const normalizedFilterValue = emailFilterValue.trim().toLowerCase()
+    if (normalizedFilterValue === "") {
+      return users
+    }
+
+    return users.filter((user) => user.primary_email.toLowerCase().includes(normalizedFilterValue))
+  }, [emailFilterValue, users])
+  const groupedUsers = buildDcxAdminDirectoryGroups(filteredUsers)
 
   return (
     <section className="flex flex-col gap-6">
-      <section className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-        <div className="mb-6 flex items-start justify-between gap-4 border-b border-black/6 pb-5">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Directory
-            </p>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
-              Users
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              View the current DCX users table in one compact internal surface while auth and
-              editing are still being built.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-3 text-sm text-slate-600">
-            <span className="border border-slate-200 bg-slate-50 px-3 py-1">
-              Read-only MVP admin surface
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-8 rounded-none px-4 text-xs"
-              onClick={() => usersListQuery.refetch()}
-            >
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {usersListQuery.isLoading ? (
+      {usersListQuery.isLoading ? (
+        <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <p className="text-sm text-slate-500">Loading users list...</p>
-        ) : null}
+        </section>
+      ) : null}
 
-        {usersListQuery.isError ? (
+      {usersListQuery.isError ? (
+        <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-500">
               Admin read blocked
@@ -328,38 +343,82 @@ export function DcxAdminUsersListPage(props: Props) {
                 "Sign in with a valid admin or dev session, then retry."}
             </p>
           </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {!usersListQuery.isLoading && !usersListQuery.isError ? (
         <>
-          <section className="grid gap-4 md:grid-cols-3">
-            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total users</p>
-              <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{totalUserCount}</p>
-            </article>
-            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Confirmed</p>
-              <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{confirmedUserCount}</p>
-            </article>
-            <article className="border border-black/6 bg-white px-5 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Languages seen</p>
-              <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{languageCount}</p>
-            </article>
-          </section>
-
           <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Directory
-                </p>
-                <h2 className="text-xl font-semibold tracking-tight text-slate-950">
-                  Current DCX users
-                </h2>
-              </div>
-              <div className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                Ordered by latest activity
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Input
+                  value={emailFilterValue}
+                  onChange={(event) => setEmailFilterValue(event.target.value)}
+                  placeholder="Filter emails..."
+                  className="h-10 w-full min-w-0 rounded-md sm:w-[16rem]"
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" className="h-10 rounded-md px-4">
+                      Columns
+                      <ChevronDownIcon className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    {dcxAdminDirectoryColumns
+                      .filter((column) => column.id !== undefined)
+                      .map((column) => {
+                        const columnId = String(column.id)
+                        const headerLabel =
+                          columnId === "primary_email_value"
+                            ? "Email"
+                            : columnId === "primary_email_status"
+                              ? "Email status"
+                              : columnId === "primary_phone_status"
+                                ? "Phone"
+                                : columnId === "last_seen"
+                                  ? "Last seen"
+                                  : columnId === "created"
+                                    ? "Created"
+                                    : columnId === "uuid"
+                                      ? "UUID"
+                                      : "Language"
+
+                        const isVisible = columnVisibility[columnId] !== false
+
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={columnId}
+                            checked={isVisible}
+                            disabled={
+                              columnId === "primary_email_value"
+                              || columnId === "primary_email_status"
+                              || columnId === "primary_phone_status"
+                            }
+                            onCheckedChange={(checked) =>
+                              setColumnVisibility((currentVisibility) => ({
+                                ...currentVisibility,
+                                [columnId]: Boolean(checked),
+                              }))
+                            }
+                          >
+                            {headerLabel}
+                          </DropdownMenuCheckboxItem>
+                        )
+                      })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-md px-4"
+                  onClick={() => usersListQuery.refetch()}
+                >
+                  Refresh
+                </Button>
+                <div className="border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+                  Ordered by latest activity
+                </div>
               </div>
             </div>
           </section>
@@ -368,16 +427,28 @@ export function DcxAdminUsersListPage(props: Props) {
             title="Dev"
             users={groupedUsers.dev}
             emptyLabel="No dev users found yet."
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnVisibility={columnVisibility}
+            onColumnVisibilityChange={setColumnVisibility}
           />
           <DcxAdminUsersDirectoryTableSection
             title="Admin"
             users={groupedUsers.admin}
             emptyLabel="No admin users found yet."
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnVisibility={columnVisibility}
+            onColumnVisibilityChange={setColumnVisibility}
           />
           <DcxAdminUsersDirectoryTableSection
             title="Users"
             users={groupedUsers.user}
             emptyLabel="No standard users found yet."
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnVisibility={columnVisibility}
+            onColumnVisibilityChange={setColumnVisibility}
           />
         </>
       ) : null}

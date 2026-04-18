@@ -6,6 +6,8 @@ The admin users directory now uses `@tanstack/react-table` as its row/column mod
 
 What changed:
 - Added `@tanstack/react-table` to `dcx_admin/package.json`
+- Added local shadcn-style table primitives in `src/components/ui/table.tsx`
+- Added one reusable `src/components/ui/dcx_admin_data_table.tsx` wrapper so TanStack row/header rendering now sits behind a consistent admin table shell
 - Refactored `src/components/dcx_admin_users_list_page.tsx` so:
   - one shared TanStack column definition drives the users directory table
   - the three role-group sections reuse the same table column model
@@ -16,7 +18,7 @@ What changed:
 
 Why this shape:
 - It gives `dcx_admin` a reusable table foundation before more catalog/list screens are added.
-- It avoids premature abstraction into a shadcn table wrapper before we know the reusable rendering surface we actually want.
+- It now gives us the first reusable TanStack-plus-shadcn table pattern without committing to a heavier data-grid abstraction too early.
 - It preserves the current grouped directory layout, which is useful for internal scanning, while still moving the data grid logic onto a real table engine.
 
 Checks:
