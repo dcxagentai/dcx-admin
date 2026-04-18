@@ -32,6 +32,8 @@ type Props<TData> = {
   columnVisibility?: VisibilityState
   onColumnVisibilityChange?: OnChangeFn<VisibilityState>
   pageSize?: number
+  onRowClick?: (row: TData) => void
+  readRowClassName?: (row: TData) => string
 }
 
 export function DcxAdminDataTable<TData>(props: Props<TData>) {
@@ -89,7 +91,16 @@ export function DcxAdminDataTable<TData>(props: Props<TData>) {
             table.getRowModel().rows.map((row, rowIndex) => (
               <TableRow
                 key={row.id}
-                className={rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40"}
+                onClick={
+                  props.onRowClick
+                    ? () => props.onRowClick?.(row.original)
+                    : undefined
+                }
+                className={cn(
+                  rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/40",
+                  props.readRowClassName?.(row.original),
+                  props.onRowClick ? "cursor-pointer hover:bg-slate-50" : null,
+                )}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell

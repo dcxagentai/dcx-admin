@@ -6,6 +6,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table"
 
 import {
   readDcxAdminContentPageCategoriesCatalog,
@@ -32,14 +38,26 @@ import { publishDcxAdminContentPageLiveRow } from "../lib/publish_dcx_admin_cont
 import { archiveDcxAdminContentPageLiveRow } from "../lib/archive_dcx_admin_content_page_live_row"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
 import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 type Props = {
   apiBaseUrl: string
   routePageKey: string | null
   routeLanguageCode: string | null
   onOpenPage: (params: { pageKey: string; languageCode: string }) => void
+  onReturnToCatalog: () => void
 }
+
+const pageColumnHelper = createColumnHelper<DcxAdminContentPageCatalogRow>()
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
@@ -91,41 +109,57 @@ function MetadataRow(props: { label: string; value: string }) {
   )
 }
 
-function PageRow(props: {
-  row: DcxAdminContentPageCatalogRow
-  isSelected: boolean
-  onClick: () => void
+function DcxAdminSortableHeader(props: {
+  column: {
+    getIsSorted: () => false | "asc" | "desc"
+    toggleSorting: (desc?: boolean) => void
+  }
+  title: string
 }) {
+  const isSorted = props.column.getIsSorted()
   return (
     <button
       type="button"
-      onClick={props.onClick}
-      className={[
-        "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
-        props.isSelected
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
-      ].join(" ")}
+      onClick={() => props.column.toggleSorting(isSorted === "asc")}
+      className="inline-flex items-center gap-1 text-left"
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-base font-semibold tracking-tight">{props.row.page_title}</p>
-        <span
-          className={[
-            "rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em]",
-            props.isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-600",
-          ].join(" ")}
-        >
-          {props.row.publication_status}
-        </span>
-      </div>
-      <p className={props.isSelected ? "text-sm text-white/70" : "text-sm text-slate-600"}>
-        /{props.row.category.category_slug}/{props.row.page_slug}
-      </p>
-      <p className={props.isSelected ? "text-xs text-white/60" : "text-xs text-slate-500"}>
-        Updated {formatTimestampLabel(props.row.updated_at_ts_ms)}
-      </p>
+      <span>{props.title}</span>
+      <ArrowUpDownIcon className="h-3.5 w-3.5 text-slate-400" />
     </button>
   )
+}
+
+function renderLanguageLabel(language: DcxAdminContentPageCatalogRow["language"]): string {
+  return `${language.language_name_native} (${language.language_code})`
+}
+
+function readCatalogColumnWidthClassName(columnId: string): string {
+  switch (columnId) {
+    case "page_title":
+      return "w-[16rem]"
+    case "category":
+      return "w-[9rem]"
+    case "page_slug":
+      return "w-[14rem]"
+    case "language":
+      return "w-[9rem]"
+    case "publication_status":
+      return "w-[8rem]"
+    case "updated_at_ts_ms":
+      return "w-[10rem]"
+    default:
+      return ""
+  }
+}
+
+function readCatalogColumnDefinitionId(
+  column: ColumnDef<DcxAdminContentPageCatalogRow, any>,
+): string | null {
+  if (typeof column.id === "string" && column.id !== "") {
+    return column.id
+  }
+  const accessorKey = (column as { accessorKey?: unknown }).accessorKey
+  return typeof accessorKey === "string" && accessorKey !== "" ? accessorKey : null
 }
 
 export function DcxAdminContentPagesPage(props: Props) {
@@ -267,6 +301,13 @@ export function DcxAdminContentPagesPage(props: Props) {
   const [editorDraft, setEditorDraft] = useState<DraftState | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
+  const [catalogSorting, setCatalogSorting] = useState<SortingState>([
+    { id: "updated_at_ts_ms", desc: true },
+  ])
+  const [catalogVisibility, setCatalogVisibility] = useState<VisibilityState>({
+    published_at_ts_ms: false,
+  })
+  const [catalogEmailFilter, setCatalogEmailFilter] = useState("")
 
   useEffect(() => {
     if (categories.length > 0 && !categories.some((row) => row.category_key === newPageCategoryKey)) {
@@ -356,14 +397,100 @@ export function DcxAdminContentPagesPage(props: Props) {
   }, [detail, editorDraft, isDirty, isAnyWritePending])
 
   const selectedPageIds = useMemo(() => new Set(props.routePageKey ? [props.routePageKey] : []), [props.routePageKey])
+  const isCatalogRoute = !props.routePageKey || !props.routeLanguageCode
+  const filteredPages = useMemo(() => {
+    const normalizedFilter = catalogEmailFilter.trim().toLowerCase()
+    if (normalizedFilter === "") {
+      return pages
+    }
+
+    return pages.filter((page) => {
+      return [
+        page.page_title,
+        page.category.category_name,
+        page.category.category_slug,
+        page.page_slug,
+        page.language.language_name_native,
+        page.language.language_code,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedFilter)
+    })
+  }, [catalogEmailFilter, pages])
+
+  const catalogColumns = useMemo<ColumnDef<DcxAdminContentPageCatalogRow, any>[]>(() => {
+    return [
+      pageColumnHelper.accessor("page_title", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Page" />,
+        cell: ({ row }) => (
+          <span className="block truncate font-medium text-slate-950" title={row.original.page_title}>
+            {row.original.page_title}
+          </span>
+        ),
+      }),
+      pageColumnHelper.display({
+        id: "category",
+        header: "Category",
+        cell: ({ row }) => (
+          <span className="block truncate text-sm text-slate-900" title={row.original.category.category_name}>
+            {row.original.category.category_name}
+          </span>
+        ),
+        sortingFn: (left, right) =>
+          left.original.category.category_name.localeCompare(right.original.category.category_name),
+      }),
+      pageColumnHelper.accessor("page_slug", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Slug" />,
+        cell: ({ row }) => (
+          <span
+            className="block truncate text-sm text-slate-900"
+            title={`/${row.original.category.category_slug}/${row.original.page_slug}`}
+          >
+            /{row.original.category.category_slug}/{row.original.page_slug}
+          </span>
+        ),
+      }),
+      pageColumnHelper.display({
+        id: "language",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Language" />,
+        cell: ({ row }) => <span className="text-sm text-slate-900">{renderLanguageLabel(row.original.language)}</span>,
+        sortingFn: (left, right) =>
+          renderLanguageLabel(left.original.language).localeCompare(renderLanguageLabel(right.original.language)),
+      }),
+      pageColumnHelper.accessor("publication_status", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Status" />,
+        cell: ({ row }) => (
+          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-600">
+            {row.original.publication_status}
+          </span>
+        ),
+      }),
+      pageColumnHelper.accessor("updated_at_ts_ms", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Updated" />,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-sm text-slate-900">
+            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+          </span>
+        ),
+      }),
+      pageColumnHelper.accessor("published_at_ts_ms", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Published" />,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-sm text-slate-900">
+            {formatTimestampLabel(row.original.published_at_ts_ms)}
+          </span>
+        ),
+      }),
+    ]
+  }, [])
 
   function updateDraft(patch: Partial<DraftState>) {
     setEditorDraft((current) => (current ? { ...current, ...patch } : current))
   }
 
-  return (
-    <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
-      <section className="space-y-6">
+  const catalogContent = (
+    <section className="space-y-6">
         <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
@@ -418,15 +545,49 @@ export function DcxAdminContentPagesPage(props: Props) {
         </article>
 
         <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-          <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Catalog
-              </p>
-              <h3 className="text-xl font-semibold tracking-tight text-slate-950">Existing pages</h3>
-            </div>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-black/6 pb-4">
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
               {pagesCatalogQuery.data?.data.total_live_page_count ?? 0} live rows
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Input
+                value={catalogEmailFilter}
+                onChange={(event) => setCatalogEmailFilter(event.target.value)}
+                placeholder="Filter pages..."
+                className="h-10 w-[17rem] rounded-none border-slate-200 bg-white"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="rounded-none border-slate-200 bg-white">
+                    Columns
+                    <ChevronDownIcon className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-none">
+                  {catalogColumns
+                    .map((column) => ({
+                      column,
+                      columnId: readCatalogColumnDefinitionId(column),
+                    }))
+                    .filter((entry) => entry.columnId !== null)
+                    .map((column) => {
+                      const columnId = column.columnId as string
+                      const isVisible = catalogVisibility[columnId] !== false
+                      return (
+                        <DropdownMenuCheckboxItem
+                          key={columnId}
+                          className="capitalize"
+                          checked={isVisible}
+                          onCheckedChange={(checked) =>
+                            setCatalogVisibility((current) => ({ ...current, [columnId]: Boolean(checked) }))
+                          }
+                        >
+                          {columnId.replaceAll("_", " ")}
+                        </DropdownMenuCheckboxItem>
+                      )
+                    })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 
@@ -438,27 +599,34 @@ export function DcxAdminContentPagesPage(props: Props) {
             </p>
           ) : null}
 
-          <div className="space-y-3">
-            {pages.map((page) => (
-              <PageRow
-                key={page.page_id}
-                row={page}
-                isSelected={selectedPageIds.has(page.page_key)}
-                onClick={() =>
-                  props.onOpenPage({
-                    pageKey: page.page_key,
-                    languageCode: page.language.language_code,
-                  })
-                }
-              />
-            ))}
-            {pages.length === 0 && !pagesCatalogQuery.isLoading ? (
-              <p className="text-sm text-slate-500">No content pages exist yet.</p>
-            ) : null}
-          </div>
+          {!pagesCatalogQuery.isLoading && !pagesCatalogQuery.isError ? (
+            <DcxAdminDataTable
+              columns={catalogColumns}
+              data={filteredPages}
+              emptyLabel="No content pages exist yet."
+              sorting={catalogSorting}
+              onSortingChange={setCatalogSorting}
+              columnVisibility={catalogVisibility}
+              onColumnVisibilityChange={setCatalogVisibility}
+              readColumnWidthClassName={readCatalogColumnWidthClassName}
+              onRowClick={(page) =>
+                props.onOpenPage({
+                  pageKey: page.page_key,
+                  languageCode: page.language.language_code,
+                })
+              }
+              readRowClassName={(page) =>
+                selectedPageIds.has(page.page_key)
+                  ? "!bg-slate-900 text-white hover:!bg-slate-900 [&_p]:text-white [&_.text-slate-500]:!text-white/65 [&_.text-slate-600]:!text-white/75 [&_.text-slate-900]:!text-white"
+                  : ""
+              }
+            />
+          ) : null}
         </article>
       </section>
+  )
 
+  const editorContent = (
       <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
@@ -467,11 +635,43 @@ export function DcxAdminContentPagesPage(props: Props) {
               {detail ? `${detail.language.language_name_native} page` : "Select a page"}
             </h3>
           </div>
-          {detail ? (
-            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-            </p>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {detail ? (
+              <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+              </p>
+            ) : null}
+            {detail && editorDraft ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => void persistCurrentDraft()}
+                  disabled={!isDirty || isAnyWritePending}
+                  variant="outline"
+                  className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
+                >
+                  {saveMutation.isPending ? "Saving..." : "Save page"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => publishMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
+                  disabled={isAnyWritePending}
+                  className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
+                >
+                  {publishMutation.isPending ? "Publishing..." : "Publish"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => archiveMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
+                  disabled={isAnyWritePending}
+                  variant="outline"
+                  className="rounded-none border-slate-200 bg-slate-50 px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
+                >
+                  {archiveMutation.isPending ? "Archiving..." : "Archive"}
+                </Button>
+              </>
+            ) : null}
+          </div>
         </div>
 
         {!props.routePageKey ? (
@@ -511,6 +711,81 @@ export function DcxAdminContentPagesPage(props: Props) {
                 />
               </label>
             </div>
+
+            <label className="space-y-2">
+              <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                Title · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+              </span>
+              <input
+                value={editorDraft.page_title}
+                onChange={(event) => updateDraft({ page_title: event.target.value })}
+                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Lede</span>
+              <Textarea
+                value={editorDraft.page_lede}
+                onChange={(event) => updateDraft({ page_lede: event.target.value })}
+                rows={3}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+              />
+            </label>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
+                <Textarea
+                  value={editorDraft.page_body_markdown}
+                  onChange={(event) => updateDraft({ page_body_markdown: event.target.value })}
+                  rows={18}
+                  className={["min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+                />
+              </label>
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
+                <div
+                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
+                  dangerouslySetInnerHTML={{
+                    __html: renderDcxBasicMarkdownToHtml(editorDraft.page_body_markdown),
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Meta title</span>
+                <input
+                  value={editorDraft.meta_title}
+                  onChange={(event) => updateDraft({ meta_title: event.target.value })}
+                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Meta description</span>
+                <Textarea
+                  value={editorDraft.meta_description}
+                  onChange={(event) => updateDraft({ meta_description: event.target.value })}
+                  rows={3}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+                />
+              </label>
+            </div>
+
+            {publishMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(publishMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (publishMutation.error as Error).message}
+              </p>
+            ) : null}
+            {archiveMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(archiveMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (archiveMutation.error as Error).message}
+              </p>
+            ) : null}
 
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
@@ -589,110 +864,6 @@ export function DcxAdminContentPagesPage(props: Props) {
               ) : null}
             </section>
 
-            <label className="space-y-2">
-              <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-                Title · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-              </span>
-              <input
-                value={editorDraft.page_title}
-                onChange={(event) => updateDraft({ page_title: event.target.value })}
-                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Lede</span>
-              <Textarea
-                value={editorDraft.page_lede}
-                onChange={(event) => updateDraft({ page_lede: event.target.value })}
-                rows={3}
-                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
-                <Textarea
-                  value={editorDraft.page_body_markdown}
-                  onChange={(event) => updateDraft({ page_body_markdown: event.target.value })}
-                  rows={18}
-                  className={["min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-                />
-              </label>
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
-                <div
-                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
-                  dangerouslySetInnerHTML={{
-                    __html: renderDcxBasicMarkdownToHtml(editorDraft.page_body_markdown),
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Meta title</span>
-                <input
-                  value={editorDraft.meta_title}
-                  onChange={(event) => updateDraft({ meta_title: event.target.value })}
-                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Meta description</span>
-                <Textarea
-                  value={editorDraft.meta_description}
-                  onChange={(event) => updateDraft({ meta_description: event.target.value })}
-                  rows={3}
-                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-                />
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                onClick={() => void persistCurrentDraft()}
-                disabled={!isDirty || isAnyWritePending}
-                variant="outline"
-                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save page"}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => publishMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
-                disabled={isAnyWritePending}
-                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
-              >
-                {publishMutation.isPending ? "Publishing..." : "Publish"}
-              </Button>
-              <Button
-                type="button"
-                onClick={() => archiveMutation.mutate({ pageId: detail.page_id, ...editorDraft })}
-                disabled={isAnyWritePending}
-                variant="outline"
-                className="rounded-none border-slate-200 bg-slate-50 px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-              >
-                {archiveMutation.isPending ? "Archiving..." : "Archive"}
-              </Button>
-            </div>
-
-            {publishMutation.isError ? (
-              <p className="text-sm text-red-600">
-                {(publishMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (publishMutation.error as Error).message}
-              </p>
-            ) : null}
-            {archiveMutation.isError ? (
-              <p className="text-sm text-red-600">
-                {(archiveMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (archiveMutation.error as Error).message}
-              </p>
-            ) : null}
-
             <dl>
               <MetadataRow label="Page key" value={detail.page_key} />
               <MetadataRow label="Status" value={detail.publication_status} />
@@ -706,6 +877,25 @@ export function DcxAdminContentPagesPage(props: Props) {
           </div>
         ) : null}
       </article>
+  )
+
+  if (isCatalogRoute) {
+    return catalogContent
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={props.onReturnToCatalog}
+          className="rounded-none border-slate-200 bg-white"
+        >
+          Back to pages
+        </Button>
+      </div>
+      {editorContent}
     </section>
   )
 }

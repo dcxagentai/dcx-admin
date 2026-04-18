@@ -692,6 +692,7 @@ function App() {
           routeLanguageCode={routeLanguageCode}
           routeCategoryKey={routeCategoryKey}
           onOpenCategory={(params) => navigateToPathname(buildPathnameForContentPageCategory(params))}
+          onReturnToCatalog={() => navigateToPathname("/content/page-categories")}
         />
       ) : null}
 
@@ -707,6 +708,7 @@ function App() {
           routeLanguageCode={routeLanguageCode}
           routePageKey={routePageKey}
           onOpenPage={(params) => navigateToPathname(buildPathnameForContentPage(params))}
+          onReturnToCatalog={() => navigateToPathname("/content/pages")}
         />
       ) : null}
 

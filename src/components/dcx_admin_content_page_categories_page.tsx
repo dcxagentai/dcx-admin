@@ -6,6 +6,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  createColumnHelper,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table"
 
 import { readDcxAdminContentPageCategoriesCatalog } from "../lib/read_dcx_admin_content_page_categories_catalog"
 import {
@@ -23,14 +29,29 @@ import {
 } from "../lib/dcx_admin_editable_field_visuals"
 import { saveDcxAdminContentPageCategoryLiveRow } from "../lib/save_dcx_admin_content_page_category_live_row"
 import { Button } from "@/components/ui/button"
+import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 type Props = {
   apiBaseUrl: string
   routeCategoryKey: string | null
   routeLanguageCode: string | null
   onOpenCategory: (params: { categoryKey: string; languageCode: string }) => void
+  onReturnToCatalog: () => void
 }
+
+type DcxAdminContentPageCategoryCatalogRow =
+  Awaited<ReturnType<typeof readDcxAdminContentPageCategoriesCatalog>>["data"]["categories"][number]
+
+const categoryColumnHelper = createColumnHelper<DcxAdminContentPageCategoryCatalogRow>()
 
 type DraftState = {
   category_name: string
@@ -66,6 +87,60 @@ function MetadataRow(props: { label: string; value: string }) {
       <dd className="max-w-[22rem] text-right text-sm text-slate-900">{props.value}</dd>
     </div>
   )
+}
+
+function DcxAdminSortableHeader(props: {
+  column: {
+    getIsSorted: () => false | "asc" | "desc"
+    toggleSorting: (desc?: boolean) => void
+  }
+  title: string
+}) {
+  const isSorted = props.column.getIsSorted()
+  return (
+    <button
+      type="button"
+      onClick={() => props.column.toggleSorting(isSorted === "asc")}
+      className="inline-flex items-center gap-1 text-left"
+    >
+      <span>{props.title}</span>
+      <ArrowUpDownIcon className="h-3.5 w-3.5 text-slate-400" />
+    </button>
+  )
+}
+
+function renderLanguageLabel(language: {
+  language_name_native: string
+  language_code: string
+}): string {
+  return `${language.language_name_native} (${language.language_code})`
+}
+
+function readCatalogColumnWidthClassName(columnId: string): string {
+  switch (columnId) {
+    case "category_name":
+      return "w-[14rem]"
+    case "category_slug":
+      return "w-[9rem]"
+    case "language":
+      return "w-[9rem]"
+    case "category_description":
+      return "w-[18rem]"
+    case "updated_at_ts_ms":
+      return "w-[10rem]"
+    default:
+      return ""
+  }
+}
+
+function readCatalogColumnDefinitionId(
+  column: ColumnDef<DcxAdminContentPageCategoryCatalogRow, any>,
+): string | null {
+  if (typeof column.id === "string" && column.id !== "") {
+    return column.id
+  }
+  const accessorKey = (column as { accessorKey?: unknown }).accessorKey
+  return typeof accessorKey === "string" && accessorKey !== "" ? accessorKey : null
 }
 
 export function DcxAdminContentPageCategoriesPage(props: Props) {
@@ -170,6 +245,11 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
   const [editorDraft, setEditorDraft] = useState<DraftState | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
+  const [catalogSorting, setCatalogSorting] = useState<SortingState>([
+    { id: "updated_at_ts_ms", desc: true },
+  ])
+  const [catalogVisibility, setCatalogVisibility] = useState<VisibilityState>({})
+  const [catalogFilter, setCatalogFilter] = useState("")
 
   useEffect(() => {
     if (!detail) {
@@ -232,14 +312,76 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
     () => new Set(effectiveCategoryKey ? [effectiveCategoryKey] : []),
     [effectiveCategoryKey],
   )
+  const isCatalogRoute = !props.routeCategoryKey || !props.routeLanguageCode
+  const filteredCategories = useMemo(() => {
+    const normalizedFilter = catalogFilter.trim().toLowerCase()
+    if (normalizedFilter === "") {
+      return categories
+    }
+
+    return categories.filter((category) =>
+      [
+        category.category_name,
+        category.category_slug,
+        category.category_description,
+        category.language.language_name_native,
+        category.language.language_code,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedFilter),
+    )
+  }, [catalogFilter, categories])
+
+  const catalogColumns = useMemo<ColumnDef<DcxAdminContentPageCategoryCatalogRow, any>[]>(() => {
+    return [
+      categoryColumnHelper.accessor("category_name", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Category" />,
+        cell: ({ row }) => (
+          <span className="block truncate font-medium text-slate-950" title={row.original.category_name}>
+            {row.original.category_name}
+          </span>
+        ),
+      }),
+      categoryColumnHelper.accessor("category_slug", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Slug" />,
+        cell: ({ row }) => <span className="truncate text-sm text-slate-900">/{row.original.category_slug}</span>,
+      }),
+      categoryColumnHelper.display({
+        id: "language",
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Language" />,
+        cell: ({ row }) => <span className="text-sm text-slate-900">{renderLanguageLabel(row.original.language)}</span>,
+        sortingFn: (left, right) =>
+          renderLanguageLabel(left.original.language).localeCompare(renderLanguageLabel(right.original.language)),
+      }),
+      categoryColumnHelper.accessor("category_description", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Description" />,
+        cell: ({ row }) => (
+          <span
+            className="block truncate text-sm text-slate-900"
+            title={row.original.category_description || "No description yet"}
+          >
+            {row.original.category_description || "No description yet"}
+          </span>
+        ),
+      }),
+      categoryColumnHelper.accessor("updated_at_ts_ms", {
+        header: ({ column }) => <DcxAdminSortableHeader column={column} title="Updated" />,
+        cell: ({ row }) => (
+          <span className="whitespace-nowrap text-sm text-slate-900">
+            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+          </span>
+        ),
+      }),
+    ]
+  }, [categories])
 
   function updateDraft(patch: Partial<DraftState>) {
     setEditorDraft((current) => (current ? { ...current, ...patch } : current))
   }
 
-  return (
-    <section className="grid gap-6 xl:grid-cols-[0.82fr_1.18fr]">
-      <section className="space-y-6">
+  const catalogContent = (
+    <section className="space-y-6">
         <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
           <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
@@ -282,52 +424,90 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
         </article>
 
         <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-          <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Catalog</p>
-              <h3 className="text-xl font-semibold tracking-tight text-slate-950">Existing categories</h3>
-            </div>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-black/6 pb-4">
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
               {categoriesQuery.data?.data.total_live_category_count ?? 0} live rows
             </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Input
+                value={catalogFilter}
+                onChange={(event) => setCatalogFilter(event.target.value)}
+                placeholder="Filter categories..."
+                className="h-10 w-[17rem] rounded-none border-slate-200 bg-white"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" className="rounded-none border-slate-200 bg-white">
+                    Columns
+                    <ChevronDownIcon className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-none">
+                  {catalogColumns
+                    .map((column) => ({
+                      columnId: readCatalogColumnDefinitionId(column),
+                    }))
+                    .filter((entry) => entry.columnId !== null)
+                    .map((entry) => {
+                    const columnId = entry.columnId as string
+                    const isVisible = catalogVisibility[columnId] !== false
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={columnId}
+                        className="capitalize"
+                        checked={isVisible}
+                        onCheckedChange={(checked) =>
+                          setCatalogVisibility((current) => ({ ...current, [columnId]: Boolean(checked) }))
+                        }
+                      >
+                        {columnId.replaceAll("_", " ")}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {categories.map((category) => (
-              <button
-                key={category.category_key}
-                type="button"
-                onClick={() => {
-                  setLocalSelectedCategoryKey(category.category_key)
-                  setLocalSelectedLanguageCode(category.language.language_code)
-                  props.onOpenCategory({
-                    categoryKey: category.category_key,
-                    languageCode: category.language.language_code,
-                  })
-                }}
-              className={[
-                "flex w-full flex-col gap-1 border px-4 py-4 text-left transition",
-                  selectedCategoryKeys.has(category.category_key)
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-black/6 bg-white text-slate-950 hover:border-slate-300",
-                ].join(" ")}
-              >
-                <p className="text-base font-semibold tracking-tight">{category.category_name}</p>
-                <p className={selectedCategoryKeys.has(category.category_key) ? "text-sm text-white/70" : "text-sm text-slate-600"}>
-                  /{category.category_slug}
-                </p>
-                <p className={selectedCategoryKeys.has(category.category_key) ? "text-xs text-white/60" : "text-xs text-slate-500"}>
-                  Updated {formatTimestampLabel(category.updated_at_ts_ms)}
-                </p>
-              </button>
-            ))}
-            {categories.length === 0 && !categoriesQuery.isLoading ? (
-              <p className="text-sm text-slate-500">No content-page categories exist yet.</p>
-            ) : null}
-          </div>
+          {categoriesQuery.isError ? (
+            <p className="text-sm text-red-600">
+              {(categoriesQuery.error as Error & { suggested_action?: string }).suggested_action ??
+                (categoriesQuery.error as Error).message}
+            </p>
+          ) : null}
+
+          {!categoriesQuery.isLoading && !categoriesQuery.isError ? (
+            <DcxAdminDataTable
+              columns={catalogColumns}
+              data={filteredCategories}
+              emptyLabel="No content-page categories exist yet."
+              sorting={catalogSorting}
+              onSortingChange={setCatalogSorting}
+              columnVisibility={catalogVisibility}
+              onColumnVisibilityChange={setCatalogVisibility}
+              readColumnWidthClassName={readCatalogColumnWidthClassName}
+              onRowClick={(category) => {
+                setLocalSelectedCategoryKey(category.category_key)
+                setLocalSelectedLanguageCode(category.language.language_code)
+                props.onOpenCategory({
+                  categoryKey: category.category_key,
+                  languageCode: category.language.language_code,
+                })
+              }}
+              readRowClassName={(category) =>
+                selectedCategoryKeys.has(category.category_key)
+                  ? "!bg-slate-900 text-white hover:!bg-slate-900 [&_p]:text-white [&_.text-slate-500]:!text-white/65 [&_.text-slate-900]:!text-white"
+                  : ""
+              }
+            />
+          ) : categoriesQuery.isLoading ? (
+            <p className="text-sm text-slate-500">Loading categories...</p>
+          ) : null}
         </article>
       </section>
+  )
 
+  const editorContent = (
       <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
@@ -336,11 +516,23 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               {detail ? `${detail.language.language_name_native} category` : "Select a category"}
             </h3>
           </div>
-          {detail ? (
-            <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-              {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-            </p>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {detail ? (
+              <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+              </p>
+            ) : null}
+            {detail && editorDraft ? (
+              <Button
+                type="button"
+                onClick={() => void persistCurrentDraft()}
+                disabled={!isDirty || isAnyWritePending}
+                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
+              >
+                {saveMutation.isPending ? "Saving..." : "Save category"}
+              </Button>
+            ) : null}
+          </div>
         </div>
 
         {!effectiveCategoryKey ? (
@@ -356,6 +548,43 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
 
         {detail && editorDraft ? (
           <div className="space-y-6">
+            <label className="space-y-2">
+                <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                  Category name · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+                </span>
+              <input
+                value={editorDraft.category_name}
+                onChange={(event) => updateDraft({ category_name: event.target.value })}
+                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Description</span>
+              <Textarea
+                value={editorDraft.category_description}
+                onChange={(event) => updateDraft({ category_description: event.target.value })}
+                rows={4}
+                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Slug</span>
+              <input
+                value={editorDraft.category_slug}
+                onChange={(event) => updateDraft({ category_slug: event.target.value })}
+                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
+              />
+            </label>
+
+            {saveMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(saveMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (saveMutation.error as Error).message}
+              </p>
+            ) : null}
+
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -413,54 +642,6 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               ) : null}
             </section>
 
-            <label className="space-y-2">
-                <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-                  Category name · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-                </span>
-              <input
-                value={editorDraft.category_name}
-                onChange={(event) => updateDraft({ category_name: event.target.value })}
-                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Description</span>
-              <Textarea
-                value={editorDraft.category_description}
-                onChange={(event) => updateDraft({ category_description: event.target.value })}
-                rows={4}
-                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Slug</span>
-              <input
-                value={editorDraft.category_slug}
-                onChange={(event) => updateDraft({ category_slug: event.target.value })}
-                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                onClick={() => void persistCurrentDraft()}
-                disabled={!isDirty || isAnyWritePending}
-                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save category"}
-              </Button>
-            </div>
-
-            {saveMutation.isError ? (
-              <p className="text-sm text-red-600">
-                {(saveMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (saveMutation.error as Error).message}
-              </p>
-            ) : null}
-
             <dl>
               <MetadataRow label="Category key" value={detail.category_key} />
               <MetadataRow label="Updated at" value={formatTimestampLabel(detail.updated_at_ts_ms)} />
@@ -472,6 +653,25 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
           </div>
         ) : null}
       </article>
+  )
+
+  if (isCatalogRoute) {
+    return catalogContent
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={props.onReturnToCatalog}
+          className="rounded-none border-slate-200 bg-white"
+        >
+          Back to categories
+        </Button>
+      </div>
+      {editorContent}
     </section>
   )
 }
