@@ -19,7 +19,10 @@ import {
 } from "../lib/read_dcx_admin_live_ux_strings_catalog"
 import { saveDcxAdminLiveUxStringRow } from "../lib/save_dcx_admin_live_ux_string_row"
 import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
-import { DcxAdminTranslationLanguageControls } from "./dcx_admin_translation_language_controls"
+import {
+  DcxAdminTranslationLanguageControls,
+  DcxAdminTranslationLanguageSelector,
+} from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
@@ -86,7 +89,7 @@ function readMatchesSurfaceScope(
   return !row.string_group.startsWith("app_") && !row.string_group.startsWith("admin_")
 }
 
-function MetadataRow(props: { label: string; value: string }) {
+function MetadataRow(props: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-black/5 py-3 last:border-b-0">
       <dt className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
@@ -215,7 +218,8 @@ function DcxAdminSortableHeader(props: {
 
 function CatalogTextCard(props: {
   eyebrow: string
-  title: React.ReactNode
+  title?: React.ReactNode
+  headerAccessory?: React.ReactNode
   row: DcxAdminUxStringCatalogRow | null
   emptyMessage: string
   editable?: boolean
@@ -229,11 +233,18 @@ function CatalogTextCard(props: {
 }) {
   return (
     <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-      <div className="mb-5 space-y-2 border-b border-black/6 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          {props.eyebrow}
-        </p>
-        <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
+      <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            {props.eyebrow}
+          </p>
+          {props.title ? (
+            <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
+          ) : null}
+        </div>
+        {props.headerAccessory ? (
+          <div className="w-full max-w-sm">{props.headerAccessory}</div>
+        ) : null}
       </div>
 
       {props.row ? (
@@ -268,7 +279,15 @@ function CatalogTextCard(props: {
           <dl>
             <MetadataRow
               label="Language"
-              value={`${props.row.language.language_name_native} (${props.row.language.language_code})`}
+              value={
+                <DcxAdminLanguageFlagLabel
+                  languageCode={props.row.language.language_code}
+                  label={`${props.row.language.language_name_native} (${props.row.language.language_code})`}
+                  className="justify-end gap-2"
+                  flagClassName="h-3 w-5 min-w-5"
+                  textClassName="text-sm text-slate-900"
+                />
+              }
             />
             <MetadataRow label="String id" value={String(props.row.ux_string_id)} />
             <MetadataRow label="Group" value={props.row.string_group} />
@@ -620,17 +639,9 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
-            {selectedLanguageRow ? (
-              <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-                <DcxAdminLanguageFlagLabel
-                  languageCode={selectedLanguageRow.language.language_code}
-                  label={`${selectedLanguageRow.language.language_name_native} UX string`}
-                  textClassName="text-xl font-semibold tracking-tight text-slate-950"
-                />
-              </h3>
-            ) : (
-              <h3 className="text-xl font-semibold tracking-tight text-slate-950">Select a UX string</h3>
-            )}
+            <h3 className="text-xl font-semibold tracking-tight text-slate-950">
+              {selectedLanguageRow ? "UX string" : "Select a UX string"}
+            </h3>
           </div>
           {selectedLanguageRow ? (
             <p className={["text-xs font-medium", readEditableFieldStatusTextClass(selectedLanguageVisualState)].join(" ")}>
@@ -653,6 +664,7 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
               eyebrow="Language rows"
               title="Available translations"
               description="Open another live language row here when you want to compare or edit a different translation of this UX string."
+              hideExistingLanguageSelector
               existingLanguageRows={availableLanguageRows.map((row) => ({
                 language_code: row.language.language_code,
                 language_name_native: row.language.language_name_native,
@@ -684,15 +696,31 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
                 />
                 <CatalogTextCard
                   eyebrow="Selected language"
-                  title={
-                    <DcxAdminLanguageFlagLabel
-                      languageCode={selectedLanguageRow.language.language_code}
-                      label={`${selectedLanguageRow.language.language_name_native} (${selectedLanguageRow.language.language_code})`}
-                      textClassName="text-lg font-semibold tracking-tight text-slate-950"
-                    />
-                  }
                   row={selectedLanguageRow}
                   emptyMessage="No live row exists for the selected language yet."
+                  headerAccessory={
+                    <DcxAdminTranslationLanguageSelector
+                      existingLanguageRows={availableLanguageRows.map((row) => ({
+                        language_code: row.language.language_code,
+                        language_name_native: row.language.language_name_native,
+                        is_original: row.is_original,
+                      }))}
+                      selectedLanguageCode={selectedLanguageRow.language.language_code}
+                      onSelectExistingLanguage={(languageCode) => {
+                        const matchingRow = availableLanguageRows.find(
+                          (row) => row.language.language_code === languageCode,
+                        )
+                        if (!matchingRow) {
+                          return
+                        }
+                        props.onOpenUxString?.({
+                          languageCode,
+                          stringGroup: matchingRow.string_group,
+                          stringKey: matchingRow.string_key,
+                        })
+                      }}
+                    />
+                  }
                   editable
                   draftText={selectedLanguageDraftText}
                   visualState={selectedLanguageVisualState}
