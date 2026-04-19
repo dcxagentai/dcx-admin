@@ -27,6 +27,10 @@ export type DcxAdminTranslationLanguageRow = {
   is_original?: boolean
 }
 
+type DcxAdminUnifiedTranslationLanguageOption = DcxAdminLanguageComboboxOption & {
+  kind: "existing" | "missing"
+}
+
 type Props = {
   eyebrow?: string
   title?: string
@@ -140,7 +144,137 @@ export function DcxAdminTranslationLanguageSelector(props: {
   )
 }
 
-export function DcxAdminTranslationLanguageControls(props: Props) {
+export function DcxAdminUnifiedTranslationLanguageSelector(props: {
+  existingLanguageRows: DcxAdminTranslationLanguageRow[]
+  selectedLanguageCode: string | null
+  onSelectExistingLanguage: (languageCode: string) => void
+  missingLanguages?: Array<{
+    language_code: string
+    language_name_native: string
+  }>
+  onCreateMissingLanguage?: (languageCode: string) => void
+  isCreatePending?: boolean
+  label?: string
+}) {
+  const unifiedLanguageOptions: DcxAdminUnifiedTranslationLanguageOption[] = [
+    ...props.existingLanguageRows.map((languageRow) => ({
+      ...buildDcxAdminLanguageComboboxOption({
+        languageCode: languageRow.language_code,
+        languageNameNative: languageRow.language_name_native,
+        isOriginal: languageRow.is_original,
+      }),
+      kind: "existing" as const,
+    })),
+    ...(
+      props.missingLanguages?.map((languageRow) => ({
+        ...buildDcxAdminLanguageComboboxOption({
+          languageCode: languageRow.language_code,
+          languageNameNative: languageRow.language_name_native,
+        }),
+        subtitle: `${languageRow.language_code.toUpperCase()} · create translation`,
+        searchLabel: `${languageRow.language_name_native} ${languageRow.language_code} create translation`,
+        kind: "missing" as const,
+      })) ?? []
+    ),
+  ]
+
+  const selectedLanguageOption =
+    unifiedLanguageOptions.find(
+      (option) =>
+        option.kind === "existing" && option.languageCode === props.selectedLanguageCode,
+    ) ?? null
+
+  return (
+    <div className="space-y-2">
+      {props.label ? (
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          {props.label}
+        </p>
+      ) : null}
+      <div className="relative">
+        {selectedLanguageOption ? (
+          <div className="pointer-events-none absolute inset-y-0 left-4 z-10 flex items-center">
+            <DcxCountryFlagIcon
+              regionCode={selectedLanguageOption.regionCode}
+              title={selectedLanguageOption.label}
+              fallbackLabel={selectedLanguageOption.languageCode.toUpperCase()}
+            />
+          </div>
+        ) : null}
+        <Combobox
+          items={unifiedLanguageOptions}
+          value={selectedLanguageOption ?? undefined}
+          itemToStringLabel={(option) =>
+            (option as DcxAdminUnifiedTranslationLanguageOption).label
+          }
+          itemToStringValue={(option) =>
+            (option as DcxAdminUnifiedTranslationLanguageOption).searchLabel
+          }
+          isItemEqualToValue={(left, right) =>
+            (left as DcxAdminUnifiedTranslationLanguageOption).kind ===
+              (right as DcxAdminUnifiedTranslationLanguageOption).kind &&
+            (left as DcxAdminUnifiedTranslationLanguageOption).languageCode ===
+              (right as DcxAdminUnifiedTranslationLanguageOption).languageCode
+          }
+          onValueChange={(nextLanguageOption) => {
+            if (!nextLanguageOption) {
+              return
+            }
+
+            const resolvedOption =
+              nextLanguageOption as DcxAdminUnifiedTranslationLanguageOption
+
+            if (resolvedOption.kind === "existing") {
+              props.onSelectExistingLanguage(resolvedOption.languageCode)
+              return
+            }
+
+            props.onCreateMissingLanguage?.(resolvedOption.languageCode)
+          }}
+          autoHighlight
+          openOnInputClick
+          disabled={props.isCreatePending}
+        >
+          <ComboboxInput
+            className={selectedLanguageOption ? "pr-10 pl-16" : "pr-10"}
+            placeholder={
+              props.isCreatePending
+                ? "Creating language row..."
+                : unifiedLanguageOptions.length > 0
+                  ? "Search language row"
+                  : "No language rows available"
+            }
+            disabled={props.isCreatePending}
+          />
+          <ComboboxTriggerIcon />
+          <ComboboxContent>
+            <ComboboxEmpty>No language rows found.</ComboboxEmpty>
+            <ComboboxList>
+              {(option) => (
+                <ComboboxItem
+                  key={`${(option as DcxAdminUnifiedTranslationLanguageOption).kind}-${(option as DcxAdminUnifiedTranslationLanguageOption).languageCode}`}
+                  value={option}
+                >
+                  {renderLanguageOption(option as DcxAdminUnifiedTranslationLanguageOption)}
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </div>
+    </div>
+  )
+}
+
+export function DcxAdminCreateMissingLanguageSelector(props: {
+  missingLanguages?: Array<{
+    language_code: string
+    language_name_native: string
+  }>
+  onCreateMissingLanguage: (languageCode: string) => void
+  isCreatePending?: boolean
+  label?: string
+}) {
   const [missingLanguageComboboxResetKey, setMissingLanguageComboboxResetKey] = useState(0)
 
   const missingLanguageOptions =
@@ -151,6 +285,70 @@ export function DcxAdminTranslationLanguageControls(props: Props) {
       }),
     ) ?? []
 
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        {props.label ?? "Create missing language row"}
+      </p>
+      <div className="relative">
+        <Combobox
+          key={missingLanguageComboboxResetKey}
+          items={missingLanguageOptions}
+          itemToStringLabel={(option) =>
+            (option as DcxAdminLanguageComboboxOption).label
+          }
+          itemToStringValue={(option) =>
+            (option as DcxAdminLanguageComboboxOption).searchLabel
+          }
+          isItemEqualToValue={(left, right) =>
+            (left as DcxAdminLanguageComboboxOption).languageCode ===
+            (right as DcxAdminLanguageComboboxOption).languageCode
+          }
+          onValueChange={(nextLanguageOption) => {
+            if (!nextLanguageOption) {
+              return
+            }
+            props.onCreateMissingLanguage(
+              (nextLanguageOption as DcxAdminLanguageComboboxOption).languageCode,
+            )
+            setMissingLanguageComboboxResetKey((currentValue) => currentValue + 1)
+          }}
+          autoHighlight
+          openOnInputClick
+          disabled={missingLanguageOptions.length === 0 || props.isCreatePending}
+        >
+          <ComboboxInput
+            className="pr-10"
+            placeholder={
+              missingLanguageOptions.length > 0
+                ? props.isCreatePending
+                  ? "Creating language row..."
+                  : "Search missing language"
+                : "All supported languages already exist"
+            }
+            disabled={missingLanguageOptions.length === 0 || props.isCreatePending}
+          />
+          <ComboboxTriggerIcon />
+          <ComboboxContent>
+            <ComboboxEmpty>No missing languages found.</ComboboxEmpty>
+            <ComboboxList>
+              {(option) => (
+                <ComboboxItem
+                  key={(option as DcxAdminLanguageComboboxOption).languageCode}
+                  value={option}
+                >
+                  {renderLanguageOption(option as DcxAdminLanguageComboboxOption)}
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+          </ComboboxContent>
+        </Combobox>
+      </div>
+    </div>
+  )
+}
+
+export function DcxAdminTranslationLanguageControls(props: Props) {
   return (
     <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
       <div className="space-y-2">
@@ -179,65 +377,11 @@ export function DcxAdminTranslationLanguageControls(props: Props) {
           )}
 
           {props.onCreateMissingLanguage ? (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Create missing language row
-            </p>
-            <div className="relative">
-              <Combobox
-                key={missingLanguageComboboxResetKey}
-                items={missingLanguageOptions}
-                itemToStringLabel={(option) =>
-                  (option as DcxAdminLanguageComboboxOption).label
-                }
-                itemToStringValue={(option) =>
-                  (option as DcxAdminLanguageComboboxOption).searchLabel
-                }
-                isItemEqualToValue={(left, right) =>
-                  (left as DcxAdminLanguageComboboxOption).languageCode ===
-                  (right as DcxAdminLanguageComboboxOption).languageCode
-                }
-                onValueChange={(nextLanguageOption) => {
-                  if (!nextLanguageOption) {
-                    return
-                  }
-                  props.onCreateMissingLanguage?.(
-                    (nextLanguageOption as DcxAdminLanguageComboboxOption).languageCode,
-                  )
-                  setMissingLanguageComboboxResetKey((currentValue) => currentValue + 1)
-                }}
-                autoHighlight
-                openOnInputClick
-                disabled={missingLanguageOptions.length === 0 || props.isCreatePending}
-              >
-                <ComboboxInput
-                  className="pr-10"
-                  placeholder={
-                    missingLanguageOptions.length > 0
-                      ? props.isCreatePending
-                        ? "Creating language row..."
-                        : "Search missing language"
-                      : "All supported languages already exist"
-                  }
-                  disabled={missingLanguageOptions.length === 0 || props.isCreatePending}
-                />
-                <ComboboxTriggerIcon />
-                <ComboboxContent>
-                  <ComboboxEmpty>No missing languages found.</ComboboxEmpty>
-                  <ComboboxList>
-                    {(option) => (
-                      <ComboboxItem
-                        key={(option as DcxAdminLanguageComboboxOption).languageCode}
-                        value={option}
-                      >
-                        {renderLanguageOption(option as DcxAdminLanguageComboboxOption)}
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
-            </div>
-          </div>
+            <DcxAdminCreateMissingLanguageSelector
+              missingLanguages={props.missingLanguages}
+              onCreateMissingLanguage={props.onCreateMissingLanguage}
+              isCreatePending={props.isCreatePending}
+            />
           ) : null}
         </div>
       ) : null}

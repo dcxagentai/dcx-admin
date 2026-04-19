@@ -17,11 +17,12 @@ import {
   readDcxAdminLiveUxStringsCatalog,
   type DcxAdminUxStringCatalogRow,
 } from "../lib/read_dcx_admin_live_ux_strings_catalog"
+import { createDcxAdminUxStringTranslation } from "../lib/create_dcx_admin_ux_string_translation"
+import { readDcxAdminMissingLanguageRows } from "../lib/dcx_admin_language_flag_options"
 import { saveDcxAdminLiveUxStringRow } from "../lib/save_dcx_admin_live_ux_string_row"
 import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
 import {
-  DcxAdminTranslationLanguageControls,
-  DcxAdminTranslationLanguageSelector,
+  DcxAdminUnifiedTranslationLanguageSelector,
 } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
@@ -250,13 +251,7 @@ function CatalogTextCard(props: {
       {props.row ? (
         <div className="space-y-6">
           {props.editable ? (
-            <div className="space-y-3">
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Text</p>
-                <p className={["text-xs font-medium", readEditableFieldStatusTextClass(props.visualState ?? "idle")].join(" ")}>
-                  {props.statusText}
-                </p>
-              </div>
+            <div>
               <Textarea
                 value={props.draftText ?? ""}
                 onFocus={props.onFocusText}
@@ -276,30 +271,51 @@ function CatalogTextCard(props: {
             </div>
           )}
 
-          <dl>
-            <MetadataRow
-              label="Language"
-              value={
-                <DcxAdminLanguageFlagLabel
-                  languageCode={props.row.language.language_code}
-                  label={`${props.row.language.language_name_native} (${props.row.language.language_code})`}
-                  className="justify-end gap-2"
-                  flagClassName="h-3 w-5 min-w-5"
-                  textClassName="text-sm text-slate-900"
-                />
-              }
-            />
-            <MetadataRow label="String id" value={String(props.row.ux_string_id)} />
-            <MetadataRow label="Group" value={props.row.string_group} />
-            <MetadataRow label="Key" value={props.row.string_key} />
-            <MetadataRow label="Is original" value={props.row.is_original ? "Yes" : "No"} />
-            <MetadataRow
-              label="Translation of id"
-              value={props.row.translation_of_id ? String(props.row.translation_of_id) : "Not linked"}
-            />
-            <MetadataRow label="Updated at" value={formatTimestampLabel(props.row.updated_at_ts_ms)} />
-          </dl>
         </div>
+      ) : (
+        <p className="text-sm text-slate-500">{props.emptyMessage}</p>
+      )}
+    </article>
+  )
+}
+
+function CatalogTextMetadataCard(props: {
+  eyebrow: string
+  row: DcxAdminUxStringCatalogRow | null
+  emptyMessage: string
+}) {
+  return (
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="mb-5 border-b border-black/6 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          {props.eyebrow}
+        </p>
+      </div>
+
+      {props.row ? (
+        <dl>
+          <MetadataRow
+            label="Language"
+            value={
+              <DcxAdminLanguageFlagLabel
+                languageCode={props.row.language.language_code}
+                label={`${props.row.language.language_name_native} (${props.row.language.language_code})`}
+                className="justify-end gap-2"
+                flagClassName="h-3 w-5 min-w-5"
+                textClassName="text-sm text-slate-900"
+              />
+            }
+          />
+          <MetadataRow label="String id" value={String(props.row.ux_string_id)} />
+          <MetadataRow label="Group" value={props.row.string_group} />
+          <MetadataRow label="Key" value={props.row.string_key} />
+          <MetadataRow label="Is original" value={props.row.is_original ? "Yes" : "No"} />
+          <MetadataRow
+            label="Translation of id"
+            value={props.row.translation_of_id ? String(props.row.translation_of_id) : "Not linked"}
+          />
+          <MetadataRow label="Updated at" value={formatTimestampLabel(props.row.updated_at_ts_ms)} />
+        </dl>
       ) : (
         <p className="text-sm text-slate-500">{props.emptyMessage}</p>
       )}
@@ -325,6 +341,26 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
         uxStringId: params.uxStringId,
         text: params.text,
       }),
+  })
+  const createTranslationMutation = useMutation({
+    mutationFn: async (params: { targetLanguageCode: string }) =>
+      createDcxAdminUxStringTranslation({
+        apiBaseUrl: props.apiBaseUrl,
+        stringGroup: props.routeStringGroup ?? "",
+        stringKey: props.routeStringKey ?? "",
+        sourceLanguageCode: props.routeLanguageCode ?? "en",
+        targetLanguageCode: params.targetLanguageCode,
+      }),
+    onSuccess: async (payload) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dcx_admin_live_ux_strings_catalog"],
+      })
+      props.onOpenUxString?.({
+        stringGroup: payload.data.string_group,
+        stringKey: payload.data.string_key,
+        languageCode: payload.data.language_code,
+      })
+    },
   })
 
   const allUxStrings = catalogQuery.data?.data.ux_strings ?? []
@@ -390,6 +426,13 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
         return renderLanguageLabel(left.language).localeCompare(renderLanguageLabel(right.language))
       }),
     [selectedStringRows],
+  )
+  const missingLanguageRows = useMemo(
+    () =>
+      readDcxAdminMissingLanguageRows(
+        availableLanguageRows.map((row) => row.language.language_code),
+      ),
+    [availableLanguageRows],
   )
 
   const originalRow = selectedStringRows.find((row) => row.is_original) ?? null
@@ -640,13 +683,50 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
             <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-              {selectedLanguageRow ? "UX string" : "Select a UX string"}
+              {selectedLanguageRow
+                ? `${selectedLanguageRow.string_group} / ${selectedLanguageRow.string_key}`
+                : "Select a UX string"}
             </h3>
           </div>
           {selectedLanguageRow ? (
-            <p className={["text-xs font-medium", readEditableFieldStatusTextClass(selectedLanguageVisualState)].join(" ")}>
-              {selectedLanguageStatusText}
-            </p>
+            <div className="w-full max-w-lg space-y-3">
+              <p
+                className={[
+                  "text-right text-xs font-medium",
+                  readEditableFieldStatusTextClass(selectedLanguageVisualState),
+                ].join(" ")}
+              >
+                {selectedLanguageStatusText}
+              </p>
+              <DcxAdminUnifiedTranslationLanguageSelector
+                existingLanguageRows={availableLanguageRows.map((row) => ({
+                  language_code: row.language.language_code,
+                  language_name_native: row.language.language_name_native,
+                  is_original: row.is_original,
+                }))}
+                selectedLanguageCode={selectedLanguageRow.language.language_code}
+                onSelectExistingLanguage={(languageCode) => {
+                  const matchingRow = availableLanguageRows.find(
+                    (row) => row.language.language_code === languageCode,
+                  )
+                  if (!matchingRow) {
+                    return
+                  }
+                  props.onOpenUxString?.({
+                    languageCode,
+                    stringGroup: matchingRow.string_group,
+                    stringKey: matchingRow.string_key,
+                  })
+                }}
+                missingLanguages={missingLanguageRows}
+                onCreateMissingLanguage={(languageCode) => {
+                  createTranslationMutation.mutate({
+                    targetLanguageCode: languageCode,
+                  })
+                }}
+                isCreatePending={createTranslationMutation.isPending}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -660,67 +740,77 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
 
         {!catalogQuery.isLoading && !catalogQuery.isError && selectedLanguageRow ? (
           <div className="space-y-6">
-            <DcxAdminTranslationLanguageControls
-              eyebrow="Language rows"
-              title="Available translations"
-              description="Open another live language row here when you want to compare or edit a different translation of this UX string."
-              hideExistingLanguageSelector
-              existingLanguageRows={availableLanguageRows.map((row) => ({
-                language_code: row.language.language_code,
-                language_name_native: row.language.language_name_native,
-                is_original: row.is_original,
-              }))}
-              selectedLanguageCode={selectedLanguageRow.language.language_code}
-              onSelectExistingLanguage={(languageCode) => {
-                const matchingRow = availableLanguageRows.find(
-                  (row) => row.language.language_code === languageCode,
-                )
-                if (!matchingRow) {
-                  return
-                }
-                props.onOpenUxString?.({
-                  languageCode,
-                  stringGroup: matchingRow.string_group,
-                  stringKey: matchingRow.string_key,
-                })
-              }}
-            />
+            {createTranslationMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(createTranslationMutation.error as Error & { suggested_action?: string })
+                  .suggested_action ??
+                  "We could not create that UX-string translation right now."}
+              </p>
+            ) : null}
 
-            {originalRow && selectedLanguageRow.ux_string_id !== originalRow.ux_string_id ? (
-              <section className="grid gap-6 xl:grid-cols-2">
+            {originalRow ? (
+              <div className="space-y-6">
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <CatalogTextCard
+                    eyebrow="Original"
+                    row={originalRow}
+                    emptyMessage="No live original row exists for this UX string yet."
+                  />
+                  <CatalogTextCard
+                    eyebrow="Selected language"
+                    row={selectedLanguageRow}
+                    emptyMessage="No live row exists for the selected language yet."
+                    editable
+                    draftText={selectedLanguageDraftText}
+                    visualState={selectedLanguageVisualState}
+                    statusText={selectedLanguageStatusText}
+                    onFocusText={() => {
+                      if (saveUxStringMutation.isPending) {
+                        return
+                      }
+
+                      setSelectedLanguageVisualState("editing")
+                      setSelectedLanguageStatusText("Editing. Click away to autosave.")
+                    }}
+                    onChangeText={setSelectedLanguageDraftText}
+                    onBlurText={() => {
+                      if (!selectedLanguageRow || saveUxStringMutation.isPending) {
+                        return
+                      }
+
+                      if (selectedLanguageDraftText === selectedLanguageRow.text) {
+                        setSelectedLanguageVisualState("idle")
+                        setSelectedLanguageStatusText("Blue means editable. Click into the selected language text to adjust.")
+                        return
+                      }
+
+                      setSelectedLanguageVisualState("saving")
+                      setSelectedLanguageStatusText("Saving...")
+                      void saveSelectedLanguageDraftWithRetries(selectedLanguageRow, selectedLanguageDraftText)
+                    }}
+                    isDisabled={saveUxStringMutation.isPending}
+                  />
+                </section>
+
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <CatalogTextMetadataCard
+                    eyebrow="Original metadata"
+                    row={originalRow}
+                    emptyMessage="No live original metadata exists for this UX string yet."
+                  />
+                  <CatalogTextMetadataCard
+                    eyebrow="Selected metadata"
+                    row={selectedLanguageRow}
+                    emptyMessage="No live metadata exists for the selected language yet."
+                  />
+                </section>
+              </div>
+            ) : (
+              <div className="space-y-6">
                 <CatalogTextCard
-                  eyebrow="Original"
-                  title={`${originalRow.string_group} / ${originalRow.string_key}`}
-                  row={originalRow}
-                  emptyMessage="No live original row exists for this UX string yet."
-                />
-                <CatalogTextCard
-                  eyebrow="Selected language"
+                  eyebrow="Template"
                   row={selectedLanguageRow}
                   emptyMessage="No live row exists for the selected language yet."
-                  headerAccessory={
-                    <DcxAdminTranslationLanguageSelector
-                      existingLanguageRows={availableLanguageRows.map((row) => ({
-                        language_code: row.language.language_code,
-                        language_name_native: row.language.language_name_native,
-                        is_original: row.is_original,
-                      }))}
-                      selectedLanguageCode={selectedLanguageRow.language.language_code}
-                      onSelectExistingLanguage={(languageCode) => {
-                        const matchingRow = availableLanguageRows.find(
-                          (row) => row.language.language_code === languageCode,
-                        )
-                        if (!matchingRow) {
-                          return
-                        }
-                        props.onOpenUxString?.({
-                          languageCode,
-                          stringGroup: matchingRow.string_group,
-                          stringKey: matchingRow.string_key,
-                        })
-                      }}
-                    />
-                  }
                   editable
                   draftText={selectedLanguageDraftText}
                   visualState={selectedLanguageVisualState}
@@ -751,43 +841,13 @@ export function DcxAdminUxStringsCatalogPage(props: Props) {
                   }}
                   isDisabled={saveUxStringMutation.isPending}
                 />
-              </section>
-            ) : (
-              <CatalogTextCard
-                eyebrow="Template"
-                title={`${selectedLanguageRow.string_group} / ${selectedLanguageRow.string_key}`}
-                row={selectedLanguageRow}
-                emptyMessage="No live row exists for the selected language yet."
-                editable
-                draftText={selectedLanguageDraftText}
-                visualState={selectedLanguageVisualState}
-                statusText={selectedLanguageStatusText}
-                onFocusText={() => {
-                  if (saveUxStringMutation.isPending) {
-                    return
-                  }
 
-                  setSelectedLanguageVisualState("editing")
-                  setSelectedLanguageStatusText("Editing. Click away to autosave.")
-                }}
-                onChangeText={setSelectedLanguageDraftText}
-                onBlurText={() => {
-                  if (!selectedLanguageRow || saveUxStringMutation.isPending) {
-                    return
-                  }
-
-                  if (selectedLanguageDraftText === selectedLanguageRow.text) {
-                    setSelectedLanguageVisualState("idle")
-                    setSelectedLanguageStatusText("Blue means editable. Click into the selected language text to adjust.")
-                    return
-                  }
-
-                  setSelectedLanguageVisualState("saving")
-                  setSelectedLanguageStatusText("Saving...")
-                  void saveSelectedLanguageDraftWithRetries(selectedLanguageRow, selectedLanguageDraftText)
-                }}
-                isDisabled={saveUxStringMutation.isPending}
-              />
+                <CatalogTextMetadataCard
+                  eyebrow="Template metadata"
+                  row={selectedLanguageRow}
+                  emptyMessage="No live metadata exists for the selected language yet."
+                />
+              </div>
             )}
           </div>
         ) : null}

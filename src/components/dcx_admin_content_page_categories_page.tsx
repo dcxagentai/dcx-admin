@@ -29,7 +29,7 @@ import {
 } from "../lib/dcx_admin_editable_field_visuals"
 import { saveDcxAdminContentPageCategoryLiveRow } from "../lib/save_dcx_admin_content_page_category_live_row"
 import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
-import { DcxAdminTranslationLanguageControls } from "./dcx_admin_translation_language_controls"
+import { DcxAdminUnifiedTranslationLanguageSelector } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
@@ -80,7 +80,7 @@ function buildDraftSnapshot(draft: DraftState): string {
   return JSON.stringify(draft)
 }
 
-function MetadataRow(props: { label: string; value: string }) {
+function MetadataRow(props: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-black/5 py-3 last:border-b-0">
       <dt className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
@@ -88,6 +88,188 @@ function MetadataRow(props: { label: string; value: string }) {
       </dt>
       <dd className="max-w-[22rem] text-right text-sm text-slate-900">{props.value}</dd>
     </div>
+  )
+}
+
+function CategoryContentCard(props: {
+  eyebrow: string
+  detail: DcxAdminContentPageCategoryDetail | null
+  draft?: DraftState | null
+  editable?: boolean
+  visualState?: DcxAdminEditableFieldVisualState
+  onChangeDraft?: (patch: Partial<DraftState>) => void
+  onFocusField?: () => void
+  onBlurField?: () => void
+  isDisabled?: boolean
+}) {
+  const editableSurfaceRef = useRef<HTMLDivElement | null>(null)
+
+  return (
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="mb-5 border-b border-black/6 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          {props.eyebrow}
+        </p>
+      </div>
+
+      {props.detail ? (
+        <div className="space-y-4" ref={editableSurfaceRef}>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Category name
+            </span>
+            {props.editable && props.draft && props.onChangeDraft ? (
+              <input
+                value={props.draft.category_name}
+                onChange={(event) => props.onChangeDraft?.({ category_name: event.target.value })}
+                onFocus={props.onFocusField}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    if (
+                      editableSurfaceRef.current &&
+                      editableSurfaceRef.current.contains(document.activeElement)
+                    ) {
+                      return
+                    }
+
+                    props.onBlurField?.()
+                  }, 0)
+                }}
+                disabled={props.isDisabled}
+                className={[
+                  "h-12 w-full border bg-slate-50 px-4 text-base outline-none disabled:cursor-not-allowed disabled:opacity-70",
+                  readDcxAdminEditableFieldBorderClass(props.visualState ?? "idle"),
+                ].join(" ")}
+              />
+            ) : (
+              <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900">
+                {props.detail.category_name}
+              </div>
+            )}
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Description
+            </span>
+            {props.editable && props.draft && props.onChangeDraft ? (
+              <Textarea
+                value={props.draft.category_description}
+                onChange={(event) =>
+                  props.onChangeDraft?.({ category_description: event.target.value })
+                }
+                onFocus={props.onFocusField}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    if (
+                      editableSurfaceRef.current &&
+                      editableSurfaceRef.current.contains(document.activeElement)
+                    ) {
+                      return
+                    }
+
+                    props.onBlurField?.()
+                  }, 0)
+                }}
+                disabled={props.isDisabled}
+                rows={4}
+                className={[
+                  "w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70",
+                  readDcxAdminEditableFieldBorderClass(props.visualState ?? "idle"),
+                ].join(" ")}
+              />
+            ) : (
+              <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
+                {props.detail.category_description || "No description yet."}
+              </div>
+            )}
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Slug
+            </span>
+            {props.editable && props.draft && props.onChangeDraft ? (
+              <input
+                value={props.draft.category_slug}
+                onChange={(event) => props.onChangeDraft?.({ category_slug: event.target.value })}
+                onFocus={props.onFocusField}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    if (
+                      editableSurfaceRef.current &&
+                      editableSurfaceRef.current.contains(document.activeElement)
+                    ) {
+                      return
+                    }
+
+                    props.onBlurField?.()
+                  }, 0)
+                }}
+                disabled={props.isDisabled}
+                className={[
+                  "h-11 w-full border bg-slate-50 px-4 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-70",
+                  readDcxAdminEditableFieldBorderClass(props.visualState ?? "idle"),
+                ].join(" ")}
+              />
+            ) : (
+              <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
+                /{props.detail.category_slug}
+              </div>
+            )}
+          </label>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-500">No category row available yet.</p>
+      )}
+    </article>
+  )
+}
+
+function CategoryMetadataCard(props: {
+  eyebrow: string
+  detail: DcxAdminContentPageCategoryDetail | null
+  publicRouteSlug?: string | null
+}) {
+  return (
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="mb-5 border-b border-black/6 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          {props.eyebrow}
+        </p>
+      </div>
+
+      {props.detail ? (
+        <dl>
+          <MetadataRow
+            label="Language"
+            value={
+              <DcxAdminLanguageFlagLabel
+                languageCode={props.detail.language.language_code}
+                label={`${props.detail.language.language_name_native} (${props.detail.language.language_code})`}
+                className="justify-end gap-2"
+                flagClassName="h-3 w-5 min-w-5"
+                textClassName="text-sm text-slate-900"
+              />
+            }
+          />
+          <MetadataRow label="Category key" value={props.detail.category_key} />
+          <MetadataRow label="Category id" value={String(props.detail.category_id)} />
+          <MetadataRow label="Is original" value={props.detail.is_original ? "Yes" : "No"} />
+          <MetadataRow
+            label="Translation of id"
+            value={props.detail.translation_of_id ? String(props.detail.translation_of_id) : "Not linked"}
+          />
+          <MetadataRow label="Updated at" value={formatTimestampLabel(props.detail.updated_at_ts_ms)} />
+          <MetadataRow
+            label="Public route base"
+            value={`/${props.detail.language.language_code}/${props.publicRouteSlug ?? props.detail.category_slug}`}
+          />
+        </dl>
+      ) : (
+        <p className="text-sm text-slate-500">No category metadata available yet.</p>
+      )}
+    </article>
   )
 }
 
@@ -147,7 +329,6 @@ function readCatalogColumnDefinitionId(
 
 export function DcxAdminContentPageCategoriesPage(props: Props) {
   const queryClient = useQueryClient()
-  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [localSelectedCategoryKey, setLocalSelectedCategoryKey] = useState<string | null>(
     props.routeCategoryKey,
@@ -170,6 +351,27 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
         languageCode: effectiveLanguageCode ?? "en",
       }),
     enabled: Boolean(effectiveCategoryKey && effectiveLanguageCode),
+  })
+  const originalCategoryTranslationSummary = categoryDetailQuery.data?.data.translation_summary.existing_translations.find(
+    (translation) => translation.is_original,
+  )
+  const originalCategoryLanguageCode = originalCategoryTranslationSummary?.language.language_code ?? null
+  const shouldReadOriginalCategoryDetail =
+    Boolean(effectiveCategoryKey) && Boolean(originalCategoryLanguageCode)
+  const originalCategoryDetailQuery = useQuery({
+    queryKey: [
+      "dcx_admin_content_page_category_detail",
+      originalCategoryLanguageCode,
+      effectiveCategoryKey,
+      "original_reference",
+    ],
+    queryFn: async () =>
+      readDcxAdminContentPageCategoryDetail({
+        apiBaseUrl: props.apiBaseUrl,
+        categoryKey: effectiveCategoryKey ?? "",
+        languageCode: originalCategoryLanguageCode ?? "en",
+      }),
+    enabled: shouldReadOriginalCategoryDetail,
   })
 
   useEffect(() => {
@@ -243,6 +445,8 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
 
   const categories = categoriesQuery.data?.data.categories ?? []
   const detail = categoryDetailQuery.data?.data ?? null
+  const originalDetail =
+    detail?.is_original ? detail : originalCategoryDetailQuery.data?.data ?? null
   const [newCategoryName, setNewCategoryName] = useState("")
   const [editorDraft, setEditorDraft] = useState<DraftState | null>(null)
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
@@ -272,22 +476,14 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
 
   useEffect(() => {
     return () => {
-      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
       if (resetStateTimeoutRef.current) clearTimeout(resetStateTimeoutRef.current)
     }
   }, [])
 
   const draftSnapshot = editorDraft ? buildDraftSnapshot(editorDraft) : ""
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
-  const isAnyWritePending =
-    createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
-
   async function persistCurrentDraft(): Promise<void> {
     if (!detail || !editorDraft || !isDirty) return
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current)
-      autosaveTimeoutRef.current = null
-    }
     setVisualState("saving")
     try {
       await saveMutation.mutateAsync({ categoryId: detail.category_id, ...editorDraft })
@@ -300,15 +496,6 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
       setVisualState("error")
     }
   }
-
-  useEffect(() => {
-    if (!detail || !editorDraft || !isDirty || isAnyWritePending) return
-    setVisualState("editing")
-    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current)
-    autosaveTimeoutRef.current = setTimeout(() => {
-      void persistCurrentDraft()
-    }, 30000)
-  }, [detail, editorDraft, isDirty, isAnyWritePending])
 
   const selectedCategoryKeys = useMemo(
     () => new Set(effectiveCategoryKey ? [effectiveCategoryKey] : []),
@@ -516,31 +703,48 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
             {detail ? (
               <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-                <DcxAdminLanguageFlagLabel
-                  languageCode={detail.language.language_code}
-                  label={`${detail.language.language_name_native} category`}
-                  textClassName="text-xl font-semibold tracking-tight text-slate-950"
-                />
+                {originalDetail?.category_name ?? detail.category_name}
               </h3>
             ) : (
               <h3 className="text-xl font-semibold tracking-tight text-slate-950">Select a category</h3>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="w-full max-w-lg space-y-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {detail ? (
+                <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                  {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+                </p>
+              ) : null}
+            </div>
             {detail ? (
-              <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-                {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-              </p>
-            ) : null}
-            {detail && editorDraft ? (
-              <Button
-                type="button"
-                onClick={() => void persistCurrentDraft()}
-                disabled={!isDirty || isAnyWritePending}
-                className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save category"}
-              </Button>
+              <DcxAdminUnifiedTranslationLanguageSelector
+                existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
+                  language_code: translation.language.language_code,
+                  language_name_native: translation.language.language_name_native,
+                  is_original: translation.is_original,
+                }))}
+                selectedLanguageCode={detail.language.language_code}
+                onSelectExistingLanguage={(languageCode) => {
+                  const matchingTranslation = detail.translation_summary.existing_translations.find(
+                    (translation) => translation.language.language_code === languageCode,
+                  )
+                  if (!matchingTranslation) {
+                    return
+                  }
+                  setLocalSelectedCategoryKey(matchingTranslation.category_key)
+                  setLocalSelectedLanguageCode(languageCode)
+                  props.onOpenCategory({
+                    categoryKey: matchingTranslation.category_key,
+                    languageCode,
+                  })
+                }}
+                missingLanguages={detail.translation_summary.missing_languages}
+                onCreateMissingLanguage={(languageCode) =>
+                  createTranslationMutation.mutate({ targetLanguageCode: languageCode })
+                }
+                isCreatePending={createTranslationMutation.isPending}
+              />
             ) : null}
           </div>
         </div>
@@ -558,36 +762,6 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
 
         {detail && editorDraft ? (
           <div className="space-y-6">
-            <label className="space-y-2">
-                <span className={["text-xs font-semibold uppercase tracking-[0.18em]", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-                  Category name · {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-                </span>
-              <input
-                value={editorDraft.category_name}
-                onChange={(event) => updateDraft({ category_name: event.target.value })}
-                className={["h-12 w-full border bg-slate-50 px-4 text-base outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Description</span>
-              <Textarea
-                value={editorDraft.category_description}
-                onChange={(event) => updateDraft({ category_description: event.target.value })}
-                rows={4}
-                className={["w-full resize-y rounded-none border bg-slate-50 px-4 py-3 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Slug</span>
-              <input
-                value={editorDraft.category_slug}
-                onChange={(event) => updateDraft({ category_slug: event.target.value })}
-                className={["h-11 w-full border bg-slate-50 px-4 text-sm outline-none", readDcxAdminEditableFieldBorderClass(visualState)].join(" ")}
-              />
-            </label>
-
             {saveMutation.isError ? (
               <p className="text-sm text-red-600">
                 {(saveMutation.error as Error & { suggested_action?: string }).suggested_action ??
@@ -595,43 +769,92 @@ export function DcxAdminContentPageCategoriesPage(props: Props) {
               </p>
             ) : null}
 
-            <DcxAdminTranslationLanguageControls
-              title="Existing and missing language rows"
-              existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
-                language_code: translation.language.language_code,
-                language_name_native: translation.language.language_name_native,
-                is_original: translation.is_original,
-              }))}
-              selectedLanguageCode={detail.language.language_code}
-              onSelectExistingLanguage={(languageCode) => {
-                const matchingTranslation = detail.translation_summary.existing_translations.find(
-                  (translation) => translation.language.language_code === languageCode,
-                )
-                if (!matchingTranslation) {
-                  return
-                }
-                setLocalSelectedCategoryKey(matchingTranslation.category_key)
-                setLocalSelectedLanguageCode(languageCode)
-                props.onOpenCategory({
-                  categoryKey: matchingTranslation.category_key,
-                  languageCode,
-                })
-              }}
-              missingLanguages={detail.translation_summary.missing_languages}
-              onCreateMissingLanguage={(languageCode) =>
-                createTranslationMutation.mutate({ targetLanguageCode: languageCode })
-              }
-              isCreatePending={createTranslationMutation.isPending}
-            />
+            {originalDetail ? (
+              <div className="space-y-6">
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <CategoryContentCard
+                    eyebrow="Original"
+                    detail={originalDetail}
+                  />
+                  <CategoryContentCard
+                    eyebrow="Selected language"
+                    detail={detail}
+                    draft={editorDraft}
+                    editable
+                    visualState={visualState}
+                    onChangeDraft={updateDraft}
+                    onFocusField={() => {
+                      if (saveMutation.isPending) {
+                        return
+                      }
 
-            <dl>
-              <MetadataRow label="Category key" value={detail.category_key} />
-              <MetadataRow label="Updated at" value={formatTimestampLabel(detail.updated_at_ts_ms)} />
-              <MetadataRow
-                label="Public route base"
-                value={`/${detail.language.language_code}/${editorDraft.category_slug}`}
-              />
-            </dl>
+                      setVisualState("editing")
+                    }}
+                    onBlurField={() => {
+                      if (!detail || !editorDraft || saveMutation.isPending) {
+                        return
+                      }
+
+                      if (!isDirty) {
+                        setVisualState("idle")
+                        return
+                      }
+
+                      void persistCurrentDraft()
+                    }}
+                    isDisabled={saveMutation.isPending}
+                  />
+                </section>
+
+                <section className="grid gap-6 xl:grid-cols-2">
+                  <CategoryMetadataCard
+                    eyebrow="Original metadata"
+                    detail={originalDetail}
+                  />
+                  <CategoryMetadataCard
+                    eyebrow="Selected metadata"
+                    detail={detail}
+                    publicRouteSlug={editorDraft.category_slug}
+                  />
+                </section>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <CategoryContentCard
+                  eyebrow="Template"
+                  detail={detail}
+                  draft={editorDraft}
+                  editable
+                  visualState={visualState}
+                  onChangeDraft={updateDraft}
+                  onFocusField={() => {
+                    if (saveMutation.isPending) {
+                      return
+                    }
+
+                    setVisualState("editing")
+                  }}
+                  onBlurField={() => {
+                    if (!detail || !editorDraft || saveMutation.isPending) {
+                      return
+                    }
+
+                    if (!isDirty) {
+                      setVisualState("idle")
+                      return
+                    }
+
+                    void persistCurrentDraft()
+                  }}
+                  isDisabled={saveMutation.isPending}
+                />
+                <CategoryMetadataCard
+                  eyebrow="Template metadata"
+                  detail={detail}
+                  publicRouteSlug={editorDraft.category_slug}
+                />
+              </div>
+            )}
           </div>
         ) : null}
       </article>
