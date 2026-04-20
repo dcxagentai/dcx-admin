@@ -38,8 +38,7 @@ import {
   type DcxAdminEditableFieldVisualState,
 } from "../lib/dcx_admin_editable_field_visuals"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
-import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
-import { DcxAdminTranslationLanguageControls } from "./dcx_admin_translation_language_controls"
+import { DcxAdminUnifiedTranslationLanguageSelector } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
@@ -196,6 +195,106 @@ function MetadataRow(props: { label: string; value: string }) {
   )
 }
 
+function NewsletterContentComparisonCard(props: {
+  eyebrow: string
+  detail: DcxAdminNewsletterDetail | null
+  draft?: { email_subject: string; email_body: string } | null
+  editable?: boolean
+  visualState?: DcxAdminEditableFieldVisualState
+  onChangeDraft?: (patch: Partial<{ email_subject: string; email_body: string }>) => void
+}) {
+  return (
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="mb-5 border-b border-black/6 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          {props.eyebrow}
+        </p>
+      </div>
+
+      {props.detail ? (
+        <div className="space-y-4">
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Subject
+            </span>
+            {props.editable && props.draft && props.onChangeDraft ? (
+              <input
+                value={props.draft.email_subject}
+                onChange={(event) =>
+                  props.onChangeDraft?.({ email_subject: event.target.value })
+                }
+                className={[
+                  "h-12 w-full border bg-slate-50 px-4 text-base outline-none",
+                  readDcxAdminEditableFieldBorderClass(props.visualState ?? "idle"),
+                ].join(" ")}
+              />
+            ) : (
+              <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-900">
+                {props.detail.email_subject}
+              </div>
+            )}
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Body markdown
+            </span>
+            {props.editable && props.draft && props.onChangeDraft ? (
+              <Textarea
+                value={props.draft.email_body}
+                onChange={(event) =>
+                  props.onChangeDraft?.({ email_body: event.target.value })
+                }
+                rows={18}
+                className={[
+                  "min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none",
+                  readDcxAdminEditableFieldBorderClass(props.visualState ?? "idle"),
+                ].join(" ")}
+              />
+            ) : (
+              <div className="min-h-[28rem] border border-slate-200 bg-slate-50 px-4 py-4 whitespace-pre-wrap text-sm leading-7 text-slate-900">
+                {props.detail.email_body || "No body yet."}
+              </div>
+            )}
+          </label>
+        </div>
+      ) : null}
+    </article>
+  )
+}
+
+function NewsletterMetadataCard(props: {
+  eyebrow: string
+  detail: DcxAdminNewsletterDetail | null
+}) {
+  return (
+    <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+      <div className="mb-5 border-b border-black/6 pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          {props.eyebrow}
+        </p>
+      </div>
+
+      {props.detail ? (
+        <dl>
+          <MetadataRow label="Email key" value={props.detail.email_key} />
+          <MetadataRow
+            label="Language"
+            value={`${props.detail.language.language_name_native} (${props.detail.language.language_code})`}
+          />
+          <MetadataRow label="Email ID" value={String(props.detail.email_id)} />
+          <MetadataRow label="Is original" value={props.detail.is_original ? "Yes" : "No"} />
+          <MetadataRow
+            label="Translation of ID"
+            value={props.detail.translation_of_id === null ? "Not linked" : String(props.detail.translation_of_id)}
+          />
+          <MetadataRow label="Updated at" value={formatTimestampLabel(props.detail.updated_at_ts_ms)} />
+        </dl>
+      ) : null}
+    </article>
+  )
+}
+
 function NewsletterSendRow(props: {
   row: DcxAdminNewsletterSendCatalogRow
   onCancel: () => void
@@ -244,6 +343,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   const queryClient = useQueryClient()
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const resetStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const preserveSavedVisualStateRef = useRef(false)
   const catalogQuery = useQuery({
     queryKey: ["dcx_admin_newsletters_catalog"],
     queryFn: async () => readDcxAdminNewslettersCatalog({ apiBaseUrl: props.apiBaseUrl }),
@@ -257,6 +357,24 @@ export function DcxAdminNewslettersPage(props: Props) {
         languageCode: props.routeLanguageCode ?? "en",
       }),
     enabled: Boolean(props.routeEmailKey && props.routeLanguageCode),
+  })
+  const currentDetailData = detailQuery.data?.data ?? null
+  const originalTranslationRow =
+    currentDetailData?.translation_summary.existing_translations.find((translation) => translation.is_original) ??
+    null
+  const originalNewsletterDetailQuery = useQuery({
+    queryKey: [
+      "dcx_admin_newsletter_detail_original",
+      originalTranslationRow?.language.language_code,
+      originalTranslationRow?.email_key,
+    ],
+    queryFn: async () =>
+      readDcxAdminNewsletterDetail({
+        apiBaseUrl: props.apiBaseUrl,
+        emailKey: originalTranslationRow?.email_key ?? "",
+        languageCode: originalTranslationRow?.language.language_code ?? "en",
+      }),
+    enabled: Boolean(currentDetailData && !currentDetailData.is_original && originalTranslationRow),
   })
   const sendsCatalogQuery = useQuery({
     queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
@@ -352,7 +470,9 @@ export function DcxAdminNewslettersPage(props: Props) {
   })
 
   const newsletters = catalogQuery.data?.data.newsletters ?? []
-  const detail = detailQuery.data?.data ?? null
+  const detail = currentDetailData
+  const originalDetail =
+    detail?.is_original ? detail : originalNewsletterDetailQuery.data?.data ?? null
   const preparedSends = sendsCatalogQuery.data?.data.newsletter_sends ?? []
   const [newNewsletterSubject, setNewNewsletterSubject] = useState("")
   const [editorDraft, setEditorDraft] = useState<{ email_subject: string; email_body: string } | null>(
@@ -360,6 +480,8 @@ export function DcxAdminNewslettersPage(props: Props) {
   )
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState("")
   const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
+  const [nextAutosaveAtTsMs, setNextAutosaveAtTsMs] = useState<number | null>(null)
+  const [autosaveCountdownSeconds, setAutosaveCountdownSeconds] = useState<number | null>(null)
   const [scheduledSendInput, setScheduledSendInput] = useState("")
   const [sendStatusText, setSendStatusText] = useState(
     "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
@@ -374,6 +496,8 @@ export function DcxAdminNewslettersPage(props: Props) {
     if (!detail) {
       setEditorDraft(null)
       setLastSavedSnapshot("")
+      setNextAutosaveAtTsMs(null)
+      setAutosaveCountdownSeconds(null)
       setVisualState("idle")
       return
     }
@@ -384,7 +508,13 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
     setEditorDraft(nextDraft)
     setLastSavedSnapshot(buildDetailSnapshot(detail))
-    setVisualState("idle")
+    setNextAutosaveAtTsMs(null)
+    setAutosaveCountdownSeconds(null)
+    if (preserveSavedVisualStateRef.current) {
+      preserveSavedVisualStateRef.current = false
+    } else {
+      setVisualState("idle")
+    }
   }, [detail?.email_id, detail?.updated_at_ts_ms])
 
   useEffect(() => {
@@ -415,6 +545,25 @@ export function DcxAdminNewslettersPage(props: Props) {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!nextAutosaveAtTsMs) {
+      setAutosaveCountdownSeconds(null)
+      return
+    }
+
+    const updateCountdown = () => {
+      const secondsRemaining = Math.max(0, Math.ceil((nextAutosaveAtTsMs - Date.now()) / 1000))
+      setAutosaveCountdownSeconds(secondsRemaining)
+    }
+
+    updateCountdown()
+    const intervalId = window.setInterval(updateCountdown, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [nextAutosaveAtTsMs])
 
   const catalogRows = useMemo(
     () => newsletters.filter((newsletter) => newsletter.is_original),
@@ -506,14 +655,19 @@ export function DcxAdminNewslettersPage(props: Props) {
       clearTimeout(autosaveTimeoutRef.current)
       autosaveTimeoutRef.current = null
     }
+    setNextAutosaveAtTsMs(null)
+    setAutosaveCountdownSeconds(null)
 
     setVisualState("saving")
     try {
+      const savedSnapshot = buildDraftSnapshot(editorDraft)
       await saveMutation.mutateAsync({
         emailId: detail.email_id,
         emailSubject: editorDraft.email_subject,
         emailBody: editorDraft.email_body,
       })
+      preserveSavedVisualStateRef.current = true
+      setLastSavedSnapshot(savedSnapshot)
       setVisualState("saved")
       if (resetStateTimeoutRef.current) {
         clearTimeout(resetStateTimeoutRef.current)
@@ -522,12 +676,16 @@ export function DcxAdminNewslettersPage(props: Props) {
         setVisualState("idle")
       }, DCX_ADMIN_EDITABLE_FIELD_SAVED_VISIBLE_MS)
     } catch {
+      setNextAutosaveAtTsMs(null)
+      setAutosaveCountdownSeconds(null)
       setVisualState("error")
     }
   }
 
   useEffect(() => {
     if (!detail || !editorDraft || !isDirty || isAnyWritePending) {
+      setNextAutosaveAtTsMs(null)
+      setAutosaveCountdownSeconds(null)
       return
     }
 
@@ -537,6 +695,9 @@ export function DcxAdminNewslettersPage(props: Props) {
       clearTimeout(autosaveTimeoutRef.current)
     }
 
+    const nextAutosaveTsMs = Date.now() + 30000
+    setNextAutosaveAtTsMs(nextAutosaveTsMs)
+    setAutosaveCountdownSeconds(30)
     autosaveTimeoutRef.current = setTimeout(() => {
       void persistCurrentDraft()
     }, 30000)
@@ -733,30 +894,67 @@ export function DcxAdminNewslettersPage(props: Props) {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Editor</p>
             {detail ? (
               <h3 className="text-xl font-semibold tracking-tight text-slate-950">
-                <DcxAdminLanguageFlagLabel
-                  languageCode={detail.language.language_code}
-                  label={`${detail.language.language_name_native} newsletter`}
-                  textClassName="text-xl font-semibold tracking-tight text-slate-950"
-                />
+                {(originalDetail?.email_subject ?? detail.email_subject) || detail.email_key}
               </h3>
             ) : (
               <h3 className="text-xl font-semibold tracking-tight text-slate-950">Select a newsletter</h3>
             )}
           </div>
           {detail ? (
-            <div className="flex flex-col items-end gap-3">
-              <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
-                {readDcxAdminEditableFieldCompactStatusLabel(visualState)}
-              </p>
-              <Button
-                type="button"
-                onClick={() => void persistCurrentDraft()}
-                disabled={!isDirty || isAnyWritePending}
-                variant="outline"
-                className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-              >
-                {saveMutation.isPending ? "Saving..." : "Save newsletter"}
-              </Button>
+            <div className="flex min-w-[24rem] flex-col items-end gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {detail &&
+                !(visualState === "editing" && autosaveCountdownSeconds !== null && !isAnyWritePending) ? (
+                  <p className={["text-xs font-medium", readDcxAdminEditableFieldStatusTextClass(visualState)].join(" ")}>
+                    {visualState === "saving"
+                      ? "Saving..."
+                      : readDcxAdminEditableFieldCompactStatusLabel(visualState)}
+                  </p>
+                ) : null}
+                {detail && isDirty && autosaveCountdownSeconds !== null && !isAnyWritePending ? (
+                  <p className="text-xs font-medium text-amber-600">
+                    Autosave in ... {autosaveCountdownSeconds}s
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  onClick={() => void persistCurrentDraft()}
+                  disabled={!isDirty || isAnyWritePending}
+                  variant="outline"
+                  className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
+                >
+                  {saveMutation.isPending ? "Saving..." : "Save newsletter"}
+                </Button>
+              </div>
+              <div className="w-full max-w-[32rem]">
+                <DcxAdminUnifiedTranslationLanguageSelector
+                  existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
+                    language_code: translation.language.language_code,
+                    language_name_native: translation.language.language_name_native,
+                    is_original: translation.is_original,
+                  }))}
+                  selectedLanguageCode={detail.language.language_code}
+                  onSelectExistingLanguage={(languageCode) => {
+                    const matchingTranslation = detail.translation_summary.existing_translations.find(
+                      (translation) => translation.language.language_code === languageCode,
+                    )
+                    if (!matchingTranslation) {
+                      return
+                    }
+                    props.onOpenNewsletter({
+                      emailKey: matchingTranslation.email_key,
+                      languageCode,
+                    })
+                  }}
+                  missingLanguages={detail.translation_summary.missing_languages}
+                  onCreateMissingLanguage={(languageCode) =>
+                    createTranslationMutation.mutate({
+                      targetLanguageCode: languageCode,
+                    })
+                  }
+                  isCreatePending={createTranslationMutation.isPending}
+                />
+              </div>
             </div>
           ) : null}
         </div>
@@ -774,71 +972,74 @@ export function DcxAdminNewslettersPage(props: Props) {
 
         {detail && editorDraft ? (
           <div className="space-y-6">
-            <label className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Subject</span>
-              <input
-                value={editorDraft.email_subject}
-                onChange={(event) => setEditorDraft({ ...editorDraft, email_subject: event.target.value })}
-                className={[
-                  "h-12 w-full border bg-slate-50 px-4 text-base outline-none",
-                  readDcxAdminEditableFieldBorderClass(visualState),
-                ].join(" ")}
-              />
-            </label>
+            {detail && !detail.is_original && originalNewsletterDetailQuery.isLoading ? (
+              <p className="text-sm text-slate-500">Loading original newsletter reference...</p>
+            ) : null}
 
-            <div className="grid gap-4 xl:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
-                <Textarea
-                  value={editorDraft.email_body}
-                  onChange={(event) => setEditorDraft({ ...editorDraft, email_body: event.target.value })}
-                  rows={18}
-                  className={[
-                    "min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none",
-                    readDcxAdminEditableFieldBorderClass(visualState),
-                  ].join(" ")}
-                />
-              </label>
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
-                <div
-                  className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
-                  dangerouslySetInnerHTML={{
-                    __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
-                  }}
-                />
-              </div>
-            </div>
+            {detail.is_original ? (
+              <>
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Subject</span>
+                  <input
+                    value={editorDraft.email_subject}
+                    onChange={(event) => setEditorDraft({ ...editorDraft, email_subject: event.target.value })}
+                    className={[
+                      "h-12 w-full border bg-slate-50 px-4 text-base outline-none",
+                      readDcxAdminEditableFieldBorderClass(visualState),
+                    ].join(" ")}
+                  />
+                </label>
 
-            <DcxAdminTranslationLanguageControls
-              title="Existing and missing language rows"
-              description="Newsletters follow the same original/translation model as transactional templates. Create missing language rows here before preparing real sends for users who prefer those languages."
-              existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
-                language_code: translation.language.language_code,
-                language_name_native: translation.language.language_name_native,
-                is_original: translation.is_original,
-              }))}
-              selectedLanguageCode={detail.language.language_code}
-              onSelectExistingLanguage={(languageCode) => {
-                const matchingTranslation = detail.translation_summary.existing_translations.find(
-                  (translation) => translation.language.language_code === languageCode,
-                )
-                if (!matchingTranslation) {
-                  return
-                }
-                props.onOpenNewsletter({
-                  emailKey: matchingTranslation.email_key,
-                  languageCode,
-                })
-              }}
-              missingLanguages={detail.translation_summary.missing_languages}
-              onCreateMissingLanguage={(languageCode) =>
-                createTranslationMutation.mutate({
-                  targetLanguageCode: languageCode,
-                })
-              }
-              isCreatePending={createTranslationMutation.isPending}
-            />
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Body markdown</span>
+                    <Textarea
+                      value={editorDraft.email_body}
+                      onChange={(event) => setEditorDraft({ ...editorDraft, email_body: event.target.value })}
+                      rows={18}
+                      className={[
+                        "min-h-[28rem] w-full resize-y rounded-none border bg-slate-50 px-4 py-4 font-mono text-sm leading-7 outline-none",
+                        readDcxAdminEditableFieldBorderClass(visualState),
+                      ].join(" ")}
+                    />
+                  </label>
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Preview</span>
+                    <div
+                      className="min-h-[28rem] border border-black/6 bg-slate-50 px-5 py-5 text-slate-700"
+                      dangerouslySetInnerHTML={{
+                        __html: renderDcxBasicMarkdownToHtml(editorDraft.email_body),
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <NewsletterMetadataCard eyebrow="Template metadata" detail={detail} />
+              </>
+            ) : (
+              <>
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <NewsletterContentComparisonCard eyebrow="Original" detail={originalDetail} />
+                  <NewsletterContentComparisonCard
+                    eyebrow="Selected language"
+                    detail={detail}
+                    draft={editorDraft}
+                    editable
+                    visualState={visualState}
+                    onChangeDraft={(patch) =>
+                      setEditorDraft((currentDraft) =>
+                        currentDraft ? { ...currentDraft, ...patch } : currentDraft,
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <NewsletterMetadataCard eyebrow="Original metadata" detail={originalDetail} />
+                  <NewsletterMetadataCard eyebrow="Selected metadata" detail={detail} />
+                </div>
+              </>
+            )}
 
             {detail.translation_summary.missing_languages.length === 0 ? (
               <p className="text-sm text-emerald-700">
@@ -962,12 +1163,6 @@ export function DcxAdminNewslettersPage(props: Props) {
                 ) : null}
               </div>
             </section>
-
-            <dl>
-              <MetadataRow label="Email key" value={detail.email_key} />
-              <MetadataRow label="Language" value={`${detail.language.language_name_native} (${detail.language.language_code})`} />
-              <MetadataRow label="Updated at" value={formatTimestampLabel(detail.updated_at_ts_ms)} />
-            </dl>
           </div>
         ) : null}
       </article>
