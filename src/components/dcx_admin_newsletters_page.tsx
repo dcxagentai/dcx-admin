@@ -12,6 +12,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
+import { CalendarDaysIcon } from "lucide-react"
 
 import {
   readDcxAdminNewslettersCatalog,
@@ -40,6 +41,8 @@ import {
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
 import { DcxAdminUnifiedTranslationLanguageSelector } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Calendar } from "@/components/ui/calendar"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 import {
   DropdownMenu,
@@ -48,6 +51,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
@@ -57,6 +62,8 @@ type Props = {
   onOpenNewsletter: (params: { emailKey: string; languageCode: string }) => void
   onReturnToCatalog: () => void
 }
+
+type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs"
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
 
@@ -70,22 +77,115 @@ function formatTimestampLabel(timestampMs: number | null): string {
   )
 }
 
-function buildDateTimeLocalInputValue(timestampMs: number | null): string {
+function readNewsletterSendHeading(sendStatus: string): string {
+  if (sendStatus === "cancelled") {
+    return "Cancelled send"
+  }
+
+  if (sendStatus === "sending") {
+    return "Dispatch in progress"
+  }
+
+  if (sendStatus === "sent") {
+    return "Dispatch complete"
+  }
+
+  if (sendStatus === "failed") {
+    return "Dispatch completed with issues"
+  }
+
+  return "Prepared send"
+}
+
+function readNewsletterSendAudienceScopeLabel(
+  audienceScope: DcxAdminNewsletterSendAudienceScope,
+): string {
+  if (audienceScope === "admins") {
+    return "Admins only"
+  }
+
+  if (audienceScope === "devs") {
+    return "Devs only"
+  }
+
+  return "All eligible users"
+}
+
+function readNewsletterSendStatusBadgeClass(sendStatus: string): string {
+  if (sendStatus === "cancelled") {
+    return "border-slate-200 bg-slate-100 text-slate-600"
+  }
+
+  if (sendStatus === "sending") {
+    return "border-sky-200 bg-sky-50 text-sky-700"
+  }
+
+  if (sendStatus === "sent") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  }
+
+  if (sendStatus === "failed") {
+    return "border-amber-200 bg-amber-50 text-amber-700"
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-600"
+}
+
+function readNewsletterSendTimestampSummary(row: DcxAdminNewsletterSendCatalogRow): string {
+  if (row.send_status === "cancelled" && row.cancelled_at_ts_ms !== null) {
+    return `Cancelled ${formatTimestampLabel(row.cancelled_at_ts_ms)}`
+  }
+
+  if (row.send_completed_at_ts_ms !== null) {
+    return `Completed ${formatTimestampLabel(row.send_completed_at_ts_ms)}`
+  }
+
+  if (row.send_started_at_ts_ms !== null) {
+    return `Started ${formatTimestampLabel(row.send_started_at_ts_ms)}`
+  }
+
+  return `Scheduled ${formatTimestampLabel(row.scheduled_send_at_ts_ms)}`
+}
+
+function formatCalendarDateLabel(value: Date | undefined): string {
+  if (!value) {
+    return "Choose send date"
+  }
+
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(value)
+}
+
+function buildTimeInputValue(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
     return ""
   }
 
   const candidateDate = new Date(timestampMs)
   const pad = (value: number) => value.toString().padStart(2, "0")
-  return `${candidateDate.getFullYear()}-${pad(candidateDate.getMonth() + 1)}-${pad(candidateDate.getDate())}T${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
+  return `${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
 }
 
-function readTimestampFromDateTimeLocalInput(value: string): number | null {
-  if (value.trim() === "") {
+function readTimestampFromScheduledSendParts(dateValue: Date | undefined, timeValue: string): number | null {
+  if (!dateValue || timeValue.trim() === "") {
     return null
   }
 
-  const parsedDate = new Date(value)
+  const [hoursText, minutesText] = timeValue.split(":")
+  const hours = Number(hoursText)
+  const minutes = Number(minutesText)
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null
+  }
+
+  const parsedDate = new Date(dateValue)
+  parsedDate.setHours(hours, minutes, 0, 0)
   if (Number.isNaN(parsedDate.getTime())) {
     return null
   }
@@ -300,31 +400,82 @@ function NewsletterSendRow(props: {
   onCancel: () => void
   cancelDisabled: boolean
 }) {
+  const awaitingProviderCount =
+    props.row.pending_recipient_count + props.row.sending_recipient_count
+  const hasOperationalIssues =
+    props.row.failed_recipient_count > 0 ||
+    props.row.bounced_recipient_count > 0 ||
+    props.row.complained_recipient_count > 0 ||
+    props.row.blocked_missing_translation_count > 0
+
   return (
     <div className="border border-black/6 bg-white px-4 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-sm font-semibold text-slate-950">
-            {props.row.send_status === "cancelled" ? "Cancelled send" : "Prepared send"}
+            {readNewsletterSendHeading(props.row.send_status)}
           </p>
           <p className="text-xs text-slate-500">
-            Scheduled {formatTimestampLabel(props.row.scheduled_send_at_ts_ms)}
+            {readNewsletterSendTimestampSummary(props.row)}
           </p>
         </div>
-        <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+        <div
+          className={[
+            "rounded-full border px-3 py-1 text-xs font-medium",
+            readNewsletterSendStatusBadgeClass(props.row.send_status),
+          ].join(" ")}
+        >
           {props.row.send_status}
         </div>
       </div>
-      <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-4">
+
+      <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-5">
         <p>{props.row.total_recipient_count} recipients</p>
         <p>{props.row.send_candidate_count} send candidates</p>
-        <p>{props.row.skipped_recipient_count} skipped</p>
-        <p>
-          {props.row.blocked_missing_translation_count > 0
-            ? `${props.row.blocked_missing_translation_count} waiting translation`
-            : `${props.row.tracked_link_count} tracked links`}
+        <p>{props.row.tracked_link_count} tracked links</p>
+        <p>{props.row.total_click_count} clicks</p>
+        <p>{props.row.unique_clicked_link_count} clicked links</p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-sm text-slate-600">
+          Audience: {readNewsletterSendAudienceScopeLabel(props.row.send_audience_scope)}
         </p>
       </div>
+
+      <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-5">
+        <p>{awaitingProviderCount} awaiting provider</p>
+        <p>{props.row.sent_recipient_count} accepted by provider</p>
+        <p>{props.row.delivered_recipient_count} delivered</p>
+        <p>{props.row.skipped_recipient_count} skipped</p>
+        <p>{props.row.failed_recipient_count} failed</p>
+      </div>
+
+      {hasOperationalIssues ? (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+          {props.row.bounced_recipient_count > 0 ? (
+            <span className="border border-amber-200 bg-amber-50 px-3 py-1 text-amber-800">
+              {props.row.bounced_recipient_count} bounced
+            </span>
+          ) : null}
+          {props.row.complained_recipient_count > 0 ? (
+            <span className="border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700">
+              {props.row.complained_recipient_count} complained
+            </span>
+          ) : null}
+          {props.row.blocked_missing_translation_count > 0 ? (
+            <span className="border border-amber-200 bg-amber-50 px-3 py-1 text-amber-800">
+              {props.row.blocked_missing_translation_count} waiting translation
+            </span>
+          ) : null}
+          {props.row.cancelled_recipient_count > 0 ? (
+            <span className="border border-slate-200 bg-slate-100 px-3 py-1 text-slate-700">
+              {props.row.cancelled_recipient_count} recipient rows cancelled
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
       {props.row.send_status === "scheduled" ? (
         <button
           type="button"
@@ -443,12 +594,16 @@ export function DcxAdminNewslettersPage(props: Props) {
     },
   })
   const prepareSendMutation = useMutation({
-    mutationFn: async (params: { scheduledSendAtTsMs: number | null }) =>
+    mutationFn: async (params: {
+      scheduledSendAtTsMs: number | null
+      sendAudienceScope: DcxAdminNewsletterSendAudienceScope
+    }) =>
       prepareDcxAdminNewsletterSend({
         apiBaseUrl: props.apiBaseUrl,
         emailKey: props.routeEmailKey ?? "",
         languageCode: props.routeLanguageCode ?? "en",
         scheduledSendAtTsMs: params.scheduledSendAtTsMs,
+        sendAudienceScope: params.sendAudienceScope,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -482,9 +637,12 @@ export function DcxAdminNewslettersPage(props: Props) {
   const [visualState, setVisualState] = useState<DcxAdminEditableFieldVisualState>("idle")
   const [nextAutosaveAtTsMs, setNextAutosaveAtTsMs] = useState<number | null>(null)
   const [autosaveCountdownSeconds, setAutosaveCountdownSeconds] = useState<number | null>(null)
-  const [scheduledSendInput, setScheduledSendInput] = useState("")
+  const [scheduledSendDate, setScheduledSendDate] = useState<Date | undefined>(undefined)
+  const [scheduledSendTime, setScheduledSendTime] = useState("")
+  const [sendAudienceScope, setSendAudienceScope] =
+    useState<DcxAdminNewsletterSendAudienceScope>("all")
   const [sendStatusText, setSendStatusText] = useState(
-    "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
+    "Prepare one send now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
   )
   const [catalogFilterQuery, setCatalogFilterQuery] = useState("")
   const [catalogSorting, setCatalogSorting] = useState<SortingState>([
@@ -522,7 +680,9 @@ export function DcxAdminNewslettersPage(props: Props) {
       return
     }
 
-    setScheduledSendInput(buildDateTimeLocalInputValue(Date.now() + 60 * 60 * 1000))
+    const defaultScheduledSendAtTsMs = Date.now() + 60 * 60 * 1000
+    setScheduledSendDate(new Date(defaultScheduledSendAtTsMs))
+    setScheduledSendTime(buildTimeInputValue(defaultScheduledSendAtTsMs))
     if ((detail.language_readiness.total_blocked_missing_translation_count ?? 0) > 0) {
       setSendStatusText(
         `This newsletter still needs translations before sending. ${detail.language_readiness.total_blocked_missing_translation_count} eligible recipients are currently blocked by missing language coverage.`,
@@ -531,7 +691,7 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
 
     setSendStatusText(
-      "Prepare one send now or schedule it for later. This stage snapshots recipients and tracked links only.",
+      "Prepare one send now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
     )
   }, [detail?.email_id])
 
@@ -594,7 +754,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
   const isAnyWritePending =
     createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
-  const scheduledSendAtTsMs = readTimestampFromDateTimeLocalInput(scheduledSendInput)
+  const scheduledSendAtTsMs = readTimestampFromScheduledSendParts(scheduledSendDate, scheduledSendTime)
   const isSendMutationPending = prepareSendMutation.isPending || cancelSendMutation.isPending
   const hasMissingNewsletterLanguagesForEligibleUsers =
     (detail?.language_readiness.total_blocked_missing_translation_count ?? 0) > 0
@@ -705,9 +865,12 @@ export function DcxAdminNewslettersPage(props: Props) {
 
   async function handlePrepareSendNow() {
     try {
-      const payload = await prepareSendMutation.mutateAsync({ scheduledSendAtTsMs: null })
+      const payload = await prepareSendMutation.mutateAsync({
+        scheduledSendAtTsMs: null,
+        sendAudienceScope,
+      })
       setSendStatusText(
-        `Prepared one newsletter send for ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}.`,
+        `Prepared one newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}. The worker will pick it up and update this section as provider events arrive.`,
       )
     } catch (error) {
       setSendStatusText(
@@ -726,9 +889,10 @@ export function DcxAdminNewslettersPage(props: Props) {
     try {
       const payload = await prepareSendMutation.mutateAsync({
         scheduledSendAtTsMs,
+        sendAudienceScope,
       })
       setSendStatusText(
-        `Prepared one scheduled newsletter send for ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}.`,
+        `Prepared one scheduled newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}. Delivery outcomes will appear here after dispatch starts.`,
       )
     } catch (error) {
       setSendStatusText(
@@ -884,7 +1048,7 @@ export function DcxAdminNewslettersPage(props: Props) {
 
   const editorContent = (
     <section className="space-y-6">
-      <Button type="button" variant="outline" className="w-fit rounded-none" onClick={props.onReturnToCatalog}>
+      <Button type="button" variant="outline" className="w-fit" onClick={props.onReturnToCatalog}>
         Back to newsletters
       </Button>
 
@@ -916,15 +1080,16 @@ export function DcxAdminNewslettersPage(props: Props) {
                     Autosave in ... {autosaveCountdownSeconds}s
                   </p>
                 ) : null}
-                <Button
-                  type="button"
-                  onClick={() => void persistCurrentDraft()}
-                  disabled={!isDirty || isAnyWritePending}
-                  variant="outline"
-                  className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-                >
-                  {saveMutation.isPending ? "Saving..." : "Save newsletter"}
-                </Button>
+                <ButtonGroup>
+                  <Button
+                    type="button"
+                    onClick={() => void persistCurrentDraft()}
+                    disabled={!isDirty || isAnyWritePending}
+                    variant="outline"
+                  >
+                    {saveMutation.isPending ? "Saving..." : "Save newsletter"}
+                  </Button>
+                </ButtonGroup>
               </div>
               <div className="w-full max-w-[32rem]">
                 <DcxAdminUnifiedTranslationLanguageSelector
@@ -1057,11 +1222,11 @@ export function DcxAdminNewslettersPage(props: Props) {
             <section className="space-y-4 border border-black/6 bg-slate-50 px-4 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Send preparation</p>
-                  <h4 className="text-lg font-semibold tracking-tight text-slate-950">Prepare newsletter sends</h4>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Send operations</p>
+                  <h4 className="text-lg font-semibold tracking-tight text-slate-950">Prepare and review newsletter sends</h4>
                 </div>
                 <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                  {sendsCatalogQuery.data?.data.total_send_count ?? 0} prepared sends
+                  {sendsCatalogQuery.data?.data.total_send_count ?? 0} send rows
                 </div>
               </div>
 
@@ -1115,33 +1280,73 @@ export function DcxAdminNewslettersPage(props: Props) {
                 ) : null}
               </div>
 
-              <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-                <input
-                  type="datetime-local"
-                  value={scheduledSendInput}
-                  onChange={(event) => setScheduledSendInput(event.target.value)}
-                  className="h-11 border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none"
+              <div className="grid items-center gap-3 md:grid-cols-[12rem_minmax(0,1fr)_11rem_auto]">
+                <div className="space-y-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Audience</span>
+                  <Select
+                    value={sendAudienceScope}
+                    onValueChange={(value) =>
+                      setSendAudienceScope(value as DcxAdminNewsletterSendAudienceScope)
+                    }
+                  >
+                    <SelectTrigger className="h-11 w-full bg-white px-3 text-sm">
+                      <SelectValue placeholder="Choose audience" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="all">All eligible users</SelectItem>
+                      <SelectItem value="admins">Admins only</SelectItem>
+                      <SelectItem value="devs">Devs only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 justify-between px-4 text-sm font-normal"
+                    >
+                      <span>{formatCalendarDateLabel(scheduledSendDate)}</span>
+                      <CalendarDaysIcon className="size-4 text-slate-500" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={scheduledSendDate}
+                      onSelect={setScheduledSendDate}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Input
+                  type="time"
+                  step={60}
+                  value={scheduledSendTime}
+                  onChange={(event) => setScheduledSendTime(event.target.value)}
+                  className="h-11 rounded-none border-slate-200 bg-white px-4 text-sm text-slate-900"
                 />
-                <Button
-                  type="button"
-                  onClick={handlePrepareSendNow}
-                  disabled={!canPrepareSend}
-                  className="rounded-none bg-slate-900 px-5 text-white hover:bg-slate-800"
-                >
-                  {prepareSendMutation.isPending ? "Preparing..." : "Prepare send now"}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handlePrepareScheduledSend}
-                  disabled={!canPrepareSend || scheduledSendAtTsMs === null}
-                  variant="outline"
-                  className="rounded-none border-slate-200 bg-white px-5 text-slate-700 hover:border-slate-300 hover:text-slate-950"
-                >
-                  Prepare scheduled send
-                </Button>
+                <ButtonGroup className="justify-self-start">
+                  <Button
+                    type="button"
+                    onClick={handlePrepareSendNow}
+                    disabled={!canPrepareSend}
+                    className="h-11"
+                  >
+                    {prepareSendMutation.isPending ? "Preparing..." : "Prepare send now"}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handlePrepareScheduledSend}
+                    disabled={!canPrepareSend || scheduledSendAtTsMs === null}
+                    variant="outline"
+                    className="h-11"
+                  >
+                    Prepare scheduled send
+                  </Button>
+                </ButtonGroup>
               </div>
 
-              {sendsCatalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading prepared sends...</p> : null}
+              {sendsCatalogQuery.isLoading ? <p className="text-sm text-slate-500">Loading newsletter send rows...</p> : null}
               {sendsCatalogQuery.isError ? (
                 <p className="text-sm text-red-600">
                   {(sendsCatalogQuery.error as Error & { suggested_action?: string }).suggested_action ??
@@ -1159,7 +1364,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                   />
                 ))}
                 {preparedSends.length === 0 && !sendsCatalogQuery.isLoading ? (
-                  <p className="text-sm text-slate-500">No prepared sends exist for this newsletter yet.</p>
+                  <p className="text-sm text-slate-500">No send rows exist for this newsletter yet.</p>
                 ) : null}
               </div>
             </section>

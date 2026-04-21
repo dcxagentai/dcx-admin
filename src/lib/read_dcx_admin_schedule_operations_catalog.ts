@@ -1,15 +1,25 @@
 /**
  * CONTEXT:
- * This file creates one first translation row for an existing admin managed email.
+ * This file reads the admin schedule operations catalog from the backend.
  *
  * CODE:
  */
+export type DcxAdminScheduleOperationRow = {
+  operation_kind: "newsletter_send" | "sequence_launch"
+  operation_id: string
+  operation_key: string
+  title: string
+  scheduled_at_ts_ms: number
+  status: string
+  audience_scope: string
+  source_surface: "newsletter" | "sequence"
+}
+
 type SuccessResponse = {
   ok: true
   data: {
-    email_id: number
-    email_key: string
-    language_code: string
+    operations: DcxAdminScheduleOperationRow[]
+    total_operation_count: number
   }
 }
 
@@ -22,27 +32,21 @@ type ErrorResponse = {
   }
 }
 
-export async function createDcxAdminEmailTranslation(params: {
+export async function readDcxAdminScheduleOperationsCatalog(params: {
   apiBaseUrl: string
-  emailKey: string
-  sourceLanguageCode: string
-  targetLanguageCode: string
 }): Promise<SuccessResponse> {
-  const response = await fetch(
-    new URL(
-      `/admin/content/emails/${encodeURIComponent(params.sourceLanguageCode)}/${encodeURIComponent(params.emailKey)}/translations/${encodeURIComponent(params.targetLanguageCode)}/create`,
-      params.apiBaseUrl,
-    ),
-    { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } },
-  )
+  const response = await fetch(new URL("/admin/operations/schedule", params.apiBaseUrl), {
+    method: "GET",
+    credentials: "include",
+  })
   const payload = (await response.json()) as SuccessResponse | ErrorResponse
   if (!response.ok || payload.ok !== true) {
     const errorPayload =
       payload && payload.ok === false
         ? payload.error
         : {
-            code: "DCX_ADMIN_EMAIL_TRANSLATION_CREATE_FAILED",
-            message: "We could not create that DCX email translation.",
+            code: "DCX_ADMIN_SCHEDULE_OPERATIONS_CATALOG_READ_FAILED",
+            message: "We could not load the schedule operations.",
             suggested_action: "Retry after confirming the backend is reachable.",
           }
     const error = new Error(errorPayload.message) as Error & { code?: string; suggested_action?: string }

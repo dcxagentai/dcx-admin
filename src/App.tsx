@@ -10,13 +10,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { DcxAdminAuthLoginPage } from "./components/dcx_admin_auth_login_page"
 import { DcxAdminContentPageCategoriesPage } from "./components/dcx_admin_content_page_categories_page"
 import { DcxAdminContentPagesPage } from "./components/dcx_admin_content_pages_page"
+import { DcxAdminEmailSequencesPage } from "./components/dcx_admin_email_sequences_page"
 import { DcxAdminEmailsCatalogPage } from "./components/dcx_admin_emails_catalog_page"
 import { DcxAdminNewslettersPage } from "./components/dcx_admin_newsletters_page"
 import { DcxAdminPublicSitePublishPage } from "./components/dcx_admin_public_site_publish_page"
+import { DcxAdminSchedulePage } from "./components/dcx_admin_schedule_page"
 import { DcxAdminShell } from "./components/dcx_admin_shell"
 import { DcxAdminUsersListPage } from "./components/dcx_admin_users_list_page"
 import { DcxAdminUxStringsCatalogPage } from "./components/dcx_admin_ux_strings_catalog_page"
-import { DcxAdminWorkspacePlaceholderPage } from "./components/dcx_admin_workspace_placeholder_page"
 import { loginDcxUserWithEmailAndPassword } from "./lib/login_dcx_user_with_email_and_password"
 import { logoutAuthenticatedDcxUser } from "./lib/logout_authenticated_dcx_user"
 import { readDcxAuthenticatedSession } from "./lib/read_dcx_authenticated_session"
@@ -287,6 +288,22 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname.startsWith("/content/emails/sequence-emails/")) {
+    const emailSegments = pathname.replace("/content/emails/sequence-emails/", "").split("/").filter(Boolean)
+    if (emailSegments.length >= 2) {
+      return {
+        activeScreen: "emails",
+        pathname,
+        initialEmailType: "sequence",
+        routeLanguageCode: decodeURIComponent(emailSegments[0]),
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: decodeURIComponent(emailSegments.slice(1).join("/")),
+        routeNewsletterKey: null,
+      }
+    }
+  }
+
   if (pathname === "/ux/app") {
     return {
       activeScreen: "content_app",
@@ -375,6 +392,19 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
+  if (pathname === "/content/emails/sequence-emails") {
+    return {
+      activeScreen: "emails",
+      pathname,
+      initialEmailType: "sequence",
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeEmailKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
   if (pathname === "/content/emails/sequences") {
     return {
       activeScreen: "email_sequences",
@@ -385,6 +415,22 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routePageKey: null,
       routeEmailKey: null,
       routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname.startsWith("/content/emails/sequences/")) {
+    const sequenceKey = pathname.replace("/content/emails/sequences/", "").trim()
+    if (sequenceKey !== "") {
+      return {
+        activeScreen: "email_sequences",
+        pathname,
+        initialEmailType: null,
+        routeLanguageCode: null,
+        routeCategoryKey: null,
+        routePageKey: null,
+        routeEmailKey: decodeURIComponent(sequenceKey),
+        routeNewsletterKey: null,
+      }
     }
   }
 
@@ -540,7 +586,7 @@ function buildPathnameForEmailType(emailType: string | null): string {
   }
 
   if (emailType === "sequence") {
-    return "/content/emails/sequences"
+    return "/content/emails/sequence-emails"
   }
 
   return `/content/emails/${encodeURIComponent(emailType)}`
@@ -558,8 +604,23 @@ function buildPathnameForNewsletter(params: { languageCode: string; emailKey: st
   return `/content/emails/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
 }
 
+function buildPathnameForEmailSequence(params: { sequenceKey: string }): string {
+  return `/content/emails/sequences/${encodeURIComponent(params.sequenceKey)}`
+}
+
 function buildPathnameForTransactionalEmail(params: { languageCode: string; emailKey: string }): string {
   return `/content/emails/transactional/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
+}
+
+function buildPathnameForManagedEmail(
+  emailType: string | null,
+  params: { languageCode: string; emailKey: string },
+): string {
+  if (emailType === "sequence") {
+    return `/content/emails/sequence-emails/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`
+  }
+
+  return buildPathnameForTransactionalEmail(params)
 }
 
 function buildPathnameForUxString(
@@ -878,16 +939,8 @@ function App() {
       ) : null}
 
       {activeScreen === "schedule" ? (
-        <DcxAdminWorkspacePlaceholderPage
-          eyebrow="Schedule"
-          title="Queued publishing and send timing"
-          description="This section will own scheduled newsletter dispatches, later page publishing windows, and other date-based operations that need clear internal control."
-          currentShapeTitle="Planned admin mechanics"
-          currentShapeItems={[
-            "Review scheduled newsletter sends before they leave the system.",
-            "Cancel or reschedule queued operations without editing the content itself.",
-            "Extend the same model later to future timed page publishing workflows.",
-          ]}
+        <DcxAdminSchedulePage
+          apiBaseUrl={apiBaseUrl}
         />
       ) : null}
 
@@ -928,8 +981,8 @@ function App() {
           initialEmailType={initialEmailType}
           routeLanguageCode={routeLanguageCode}
           routeEmailKey={routeEmailKey}
-          onOpenEmail={(params) => navigateToPathname(buildPathnameForTransactionalEmail(params))}
-          onReturnToCatalog={() => navigateToPathname(buildPathnameForEmailType("transactional"))}
+          onOpenEmail={(params) => navigateToPathname(buildPathnameForManagedEmail(initialEmailType, params))}
+          onReturnToCatalog={() => navigateToPathname(buildPathnameForEmailType(initialEmailType))}
         />
       ) : null}
 
@@ -944,16 +997,11 @@ function App() {
       ) : null}
 
       {activeScreen === "email_sequences" ? (
-        <DcxAdminWorkspacePlaceholderPage
-          eyebrow="Content / Emails"
-          title="Reusable email sequences"
-          description="This route is reserved for future onboarding, nurture, and operational email sequences that should be composed once and sent in a controlled order."
-          currentShapeTitle="Planned sequence controls"
-          currentShapeItems={[
-            "Sequence templates will sit beside newsletters and transactional emails in the same admin shell.",
-            "Each sequence step can later point at one immutable email-content row with send timing rules.",
-            "The navigation is in place now so the client can already see where that workflow will live.",
-          ]}
+        <DcxAdminEmailSequencesPage
+          apiBaseUrl={apiBaseUrl}
+          routeSequenceKey={routeEmailKey}
+          onOpenSequence={(params) => navigateToPathname(buildPathnameForEmailSequence(params))}
+          onReturnToCatalog={() => navigateToPathname("/content/emails/sequences")}
         />
       ) : null}
 

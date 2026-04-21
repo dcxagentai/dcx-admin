@@ -91,11 +91,27 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
               isActive: currentPathname.startsWith("/content/emails/newsletters"),
             },
             {
-              id: "content_emails_sequences",
+              id: "content_emails_sequences_group",
               title: "Sequences",
               url: "/content/emails/sequences",
-              isActive: currentPathname.startsWith("/content/emails/sequences"),
-            },
+              isActive:
+                currentPathname.startsWith("/content/emails/sequences") ||
+                currentPathname.startsWith("/content/emails/sequence-emails"),
+              items: [
+                {
+                  id: "content_emails_sequence_plans",
+                  title: "Groups",
+                  url: "/content/emails/sequences",
+                  isActive: currentPathname.startsWith("/content/emails/sequences"),
+                },
+                {
+                  id: "content_emails_sequence_emails",
+                  title: "Emails",
+                  url: "/content/emails/sequence-emails",
+                  isActive: currentPathname.startsWith("/content/emails/sequence-emails"),
+                },
+              ],
+            },            
             {
               id: "content_emails_transactional",
               title: "Transactional",

@@ -1,7 +1,7 @@
 /**
  * CONTEXT:
- * Transactional emails admin surface for the DCX internal frontend.
- * It exists to let internal users browse transactional templates in one table-driven catalog,
+ * Managed emails admin surface for the DCX internal frontend.
+ * It exists to let internal users browse one email subtype in one table-driven catalog,
  * then open one dedicated editor route that compares the original row with one selected language row.
  */
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -18,6 +18,7 @@ import {
   type DcxAdminEmailCatalogRow,
 } from "../lib/read_dcx_admin_live_emails_catalog"
 import { createDcxAdminEmailTranslation } from "../lib/create_dcx_admin_email_translation"
+import { createDcxAdminSequenceEmailDraft } from "../lib/create_dcx_admin_sequence_email_draft"
 import { readDcxAdminMissingLanguageRows } from "../lib/dcx_admin_language_flag_options"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
 import { DcxAdminLanguageFlagLabel } from "./dcx_admin_language_flag_label"
@@ -60,6 +61,54 @@ function formatTimestampLabel(timestampMs: number | null): string {
 
 function renderLanguageLabel(language: DcxAdminEmailCatalogRow["language"]): string {
   return `${language.language_name_native} (${language.language_code})`
+}
+
+function readManagedEmailPluralLabel(emailType: string): string {
+  if (emailType === "sequence") {
+    return "Sequence emails"
+  }
+
+  return "Transactional emails"
+}
+
+function readManagedEmailSingularLabel(emailType: string): string {
+  if (emailType === "sequence") {
+    return "sequence email"
+  }
+
+  return "transactional email"
+}
+
+function readManagedEmailCatalogDescription(emailType: string): string {
+  if (emailType === "sequence") {
+    return "Create and edit sequence-specific email content that ordered sequence steps can reuse without borrowing newsletter or transactional templates."
+  }
+
+  return "Browse live transactional templates in one catalog, then open one dedicated editor route to compare the original template with one selected language row."
+}
+
+function readManagedEmailFilterPlaceholder(emailType: string): string {
+  if (emailType === "sequence") {
+    return "Filter sequence emails..."
+  }
+
+  return "Filter transactional emails..."
+}
+
+function readManagedEmailEmptyLabel(emailType: string): string {
+  if (emailType === "sequence") {
+    return "No sequence email templates exist yet."
+  }
+
+  return "No transactional email templates exist yet."
+}
+
+function readManagedEmailTranslationErrorFallback(emailType: string): string {
+  if (emailType === "sequence") {
+    return "We could not create that sequence email translation right now."
+  }
+
+  return "We could not create that transactional email translation right now."
 }
 
 function MetadataRow(props: { label: string; value: React.ReactNode }) {
@@ -353,6 +402,8 @@ function CatalogEmailMetadataCard(props: {
 export function DcxAdminEmailsCatalogPage(props: Props) {
   const queryClient = useQueryClient()
   const resetVisualStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const selectedType =
+    props.initialEmailType && props.initialEmailType.trim() !== "" ? props.initialEmailType : "transactional"
   const catalogQuery = useQuery({
     queryKey: ["dcx_admin_live_emails_catalog"],
     queryFn: async () =>
@@ -391,11 +442,26 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
       })
     },
   })
+  const createSequenceEmailDraftMutation = useMutation({
+    mutationFn: async (params: { emailSubject: string; languageCode: string }) =>
+      createDcxAdminSequenceEmailDraft({
+        apiBaseUrl: props.apiBaseUrl,
+        emailSubject: params.emailSubject,
+        languageCode: params.languageCode,
+      }),
+    onSuccess: async (payload) => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dcx_admin_live_emails_catalog"],
+      })
+      props.onOpenEmail({
+        emailKey: payload.data.email_key,
+        languageCode: payload.data.language_code,
+      })
+    },
+  })
 
   const emails = catalogQuery.data?.data.emails ?? []
-  const totalLiveRowCount = catalogQuery.data?.data.total_live_row_count ?? 0
-  const selectedType =
-    props.initialEmailType && props.initialEmailType.trim() !== "" ? props.initialEmailType : "transactional"
+  const [newSequenceEmailSubject, setNewSequenceEmailSubject] = useState("")
 
   const [catalogFilterQuery, setCatalogFilterQuery] = useState("")
   const [catalogSorting, setCatalogSorting] = useState<SortingState>([
@@ -408,6 +474,10 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
       emails.filter(
         (row) => row.email_type === selectedType && row.is_original,
       ),
+    [emails, selectedType],
+  )
+  const typeLiveRowCount = useMemo(
+    () => emails.filter((row) => row.email_type === selectedType).length,
     [emails, selectedType],
   )
 
@@ -594,13 +664,15 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-black/6 pb-4">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Content</p>
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Transactional emails</h2>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+              {readManagedEmailPluralLabel(selectedType)}
+            </h2>
             <p className="text-sm leading-6 text-slate-600">
-              Browse live transactional templates in one catalog, then open one dedicated editor route to compare the original template with one selected language row.
+              {readManagedEmailCatalogDescription(selectedType)}
             </p>
           </div>
           <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-            {totalLiveRowCount} live rows
+            {typeLiveRowCount} live rows
           </div>
         </div>
 
@@ -620,11 +692,50 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
 
         {!catalogQuery.isLoading && !catalogQuery.isError ? (
           <div className="space-y-4">
+            {selectedType === "sequence" ? (
+              <div className="flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-center lg:justify-between">
+                <Input
+                  value={newSequenceEmailSubject}
+                  onChange={(event) => setNewSequenceEmailSubject(event.target.value)}
+                  placeholder="Welcome to DCX"
+                  className="w-full lg:max-w-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    createSequenceEmailDraftMutation.isPending ||
+                    newSequenceEmailSubject.trim() === ""
+                  }
+                  onClick={() => {
+                    void createSequenceEmailDraftMutation
+                      .mutateAsync({
+                        emailSubject: newSequenceEmailSubject,
+                        languageCode: "en",
+                      })
+                      .then(() => {
+                        setNewSequenceEmailSubject("")
+                      })
+                      .catch(() => undefined)
+                  }}
+                >
+                  {createSequenceEmailDraftMutation.isPending ? "Creating..." : "New sequence email"}
+                </Button>
+              </div>
+            ) : null}
+
+            {selectedType === "sequence" && createSequenceEmailDraftMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(createSequenceEmailDraftMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (createSequenceEmailDraftMutation.error as Error).message}
+              </p>
+            ) : null}
+
             <div className="flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-center lg:justify-between">
               <Input
                 value={catalogFilterQuery}
                 onChange={(event) => setCatalogFilterQuery(event.target.value)}
-                placeholder="Filter transactional emails..."
+                placeholder={readManagedEmailFilterPlaceholder(selectedType)}
                 className="w-full lg:max-w-sm"
               />
               <DropdownMenu>
@@ -668,7 +779,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
             <DcxAdminDataTable
               columns={catalogColumns}
               data={filteredCatalogRows}
-              emptyLabel="No transactional email templates exist yet."
+              emptyLabel={readManagedEmailEmptyLabel(selectedType)}
               sorting={catalogSorting}
               onSortingChange={setCatalogSorting}
               columnVisibility={catalogVisibility}
@@ -691,7 +802,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
   const editorContent = (
     <section className="space-y-6">
       <Button type="button" variant="outline" className="w-fit rounded-none" onClick={props.onReturnToCatalog}>
-        Back to transactional emails
+        Back to {readManagedEmailPluralLabel(selectedType).toLowerCase()}
       </Button>
 
       <article className="space-y-6 border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -701,7 +812,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
             <h3 className="text-xl font-semibold tracking-tight text-slate-950">
               {selectedLanguageRow
                 ? `${selectedLanguageRow.email_type} / ${selectedLanguageRow.email_key}`
-                : "Select a transactional email"}
+                : `Select a ${readManagedEmailSingularLabel(selectedType)}`}
             </h3>
           </div>
           {selectedLanguageRow ? (
@@ -759,7 +870,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
               <p className="text-sm text-red-600">
                 {(createTranslationMutation.error as Error & { suggested_action?: string })
                   .suggested_action ??
-                  "We could not create that transactional email translation right now."}
+                  readManagedEmailTranslationErrorFallback(selectedType)}
               </p>
             ) : null}
 

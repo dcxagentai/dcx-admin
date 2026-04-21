@@ -11,7 +11,9 @@ type SuccessResponse = {
     email_key: string
     send_status: string
     scheduled_send_at_ts_ms: number
+    send_audience_scope: "all" | "admins" | "devs"
     summary: {
+      send_audience_scope: "all" | "admins" | "devs"
       prepared_recipient_count: number
       send_candidate_count: number
       skipped_recipient_count: number
@@ -34,6 +36,7 @@ export async function prepareDcxAdminNewsletterSend(params: {
   emailKey: string
   languageCode: string
   scheduledSendAtTsMs: number | null
+  sendAudienceScope: "all" | "admins" | "devs"
 }): Promise<SuccessResponse> {
   const response = await fetch(
     new URL(
@@ -46,6 +49,7 @@ export async function prepareDcxAdminNewsletterSend(params: {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scheduled_send_at_ts_ms: params.scheduledSendAtTsMs,
+        send_audience_scope: params.sendAudienceScope,
       }),
     },
   )

@@ -10,6 +10,7 @@ export type DcxAdminNewsletterSendCatalogRow = {
   email_key: string
   send_status: string
   send_audience_type: string
+  send_audience_scope: "all" | "admins" | "devs"
   scheduled_send_at_ts_ms: number
   send_started_at_ts_ms: number | null
   send_completed_at_ts_ms: number | null
@@ -21,7 +22,17 @@ export type DcxAdminNewsletterSendCatalogRow = {
   send_candidate_count: number
   skipped_recipient_count: number
   blocked_missing_translation_count: number
+  pending_recipient_count: number
+  sending_recipient_count: number
+  sent_recipient_count: number
+  delivered_recipient_count: number
+  failed_recipient_count: number
+  bounced_recipient_count: number
+  complained_recipient_count: number
+  cancelled_recipient_count: number
   tracked_link_count: number
+  total_click_count: number
+  unique_clicked_link_count: number
 }
 
 type SuccessResponse = {
@@ -60,7 +71,7 @@ export async function readDcxAdminNewsletterSendsCatalog(params: {
         ? payload.error
         : {
             code: "DCX_ADMIN_NEWSLETTER_SENDS_CATALOG_READ_FAILED",
-            message: "We could not load the prepared newsletter sends.",
+            message: "We could not load the newsletter send rows.",
             suggested_action: "Retry after confirming the backend is reachable.",
           }
     const error = new Error(errorPayload.message) as Error & { code?: string; suggested_action?: string }
