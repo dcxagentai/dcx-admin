@@ -54,6 +54,9 @@ export type DcxAdminUserListRow = {
     language_name_native: string
     is_rtl: boolean
   } | null
+  total_token_count: number
+  usage_event_count: number
+  activity_event_count: number
 }
 
 type DcxAdminUsersListSuccessResponse = {

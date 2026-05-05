@@ -27,6 +27,7 @@ import {
   readDcxAdminUsersList,
   type DcxAdminUserListRow,
 } from "../lib/read_dcx_admin_users_list"
+import { readDcxAdminUserDetail } from "../lib/read_dcx_admin_user_detail"
 
 type Props = {
   apiBaseUrl: string
@@ -109,6 +110,10 @@ function readDcxAdminDirectoryColumnWidthClass(columnId: string): string {
 
   if (columnId === "last_seen" || columnId === "created") {
     return "w-[9rem]"
+  }
+
+  if (columnId === "total_tokens" || columnId === "activity_events") {
+    return "w-[8rem]"
   }
 
   if (columnId === "uuid") {
@@ -233,6 +238,38 @@ const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
       <span className="block whitespace-nowrap">{formatTimestampLabel(cellContext.getValue())}</span>
     ),
   }),
+  dcxAdminDirectoryColumnHelper.accessor("total_token_count", {
+    id: "total_tokens",
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Tokens"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
+    cell: (cellContext) => (
+      <span className="block whitespace-nowrap text-right tabular-nums">
+        {cellContext.getValue().toLocaleString()}
+      </span>
+    ),
+  }),
+  dcxAdminDirectoryColumnHelper.accessor("activity_event_count", {
+    id: "activity_events",
+    header: ({ column }) => (
+      <DcxAdminSortableHeader
+        title="Activity"
+        canSort={column.getCanSort()}
+        sortDirection={column.getIsSorted()}
+        onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      />
+    ),
+    cell: (cellContext) => (
+      <span className="block whitespace-nowrap text-right tabular-nums">
+        {cellContext.getValue().toLocaleString()}
+      </span>
+    ),
+  }),
   dcxAdminDirectoryColumnHelper.accessor("created_at_ts_ms", {
     id: "created",
     header: ({ column }) => (
@@ -270,6 +307,8 @@ function DcxAdminUsersDirectoryTableSection(props: {
       | VisibilityState
       | ((old: VisibilityState) => VisibilityState),
   ) => void
+  onSelectUser: (user: DcxAdminUserListRow) => void
+  selectedUserId: number | null
 }) {
   return (
     <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -287,6 +326,8 @@ function DcxAdminUsersDirectoryTableSection(props: {
           onSortingChange={props.onSortingChange}
           columnVisibility={props.columnVisibility}
           onColumnVisibilityChange={props.onColumnVisibilityChange}
+          onRowClick={props.onSelectUser}
+          readRowClassName={(row) => row.user_id === props.selectedUserId ? "bg-slate-100 hover:bg-slate-100" : ""}
         />
       </div>
     </section>
@@ -295,6 +336,7 @@ function DcxAdminUsersDirectoryTableSection(props: {
 
 export function DcxAdminUsersListPage(props: Props) {
   const [emailFilterValue, setEmailFilterValue] = useState("")
+  const [selectedUser, setSelectedUser] = useState<DcxAdminUserListRow | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     uuid: false,
@@ -304,6 +346,15 @@ export function DcxAdminUsersListPage(props: Props) {
     queryFn: async () =>
       readDcxAdminUsersList({
         apiBaseUrl: props.apiBaseUrl,
+      }),
+  })
+  const selectedUserDetailQuery = useQuery({
+    queryKey: ["dcx_admin_user_detail", selectedUser?.user_id],
+    enabled: selectedUser !== null,
+    queryFn: async () =>
+      readDcxAdminUserDetail({
+        apiBaseUrl: props.apiBaseUrl,
+        userId: selectedUser?.user_id ?? 0,
       }),
   })
 
@@ -378,6 +429,10 @@ export function DcxAdminUsersListPage(props: Props) {
                                 ? "Phone"
                                 : columnId === "last_seen"
                                   ? "Last seen"
+                                  : columnId === "total_tokens"
+                                    ? "Tokens"
+                                    : columnId === "activity_events"
+                                      ? "Activity"
                                   : columnId === "created"
                                     ? "Created"
                                     : columnId === "uuid"
@@ -431,6 +486,8 @@ export function DcxAdminUsersListPage(props: Props) {
             onSortingChange={setSorting}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={setColumnVisibility}
+            onSelectUser={setSelectedUser}
+            selectedUserId={selectedUser?.user_id ?? null}
           />
           <DcxAdminUsersDirectoryTableSection
             title="Admin"
@@ -440,6 +497,8 @@ export function DcxAdminUsersListPage(props: Props) {
             onSortingChange={setSorting}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={setColumnVisibility}
+            onSelectUser={setSelectedUser}
+            selectedUserId={selectedUser?.user_id ?? null}
           />
           <DcxAdminUsersDirectoryTableSection
             title="Users"
@@ -449,9 +508,60 @@ export function DcxAdminUsersListPage(props: Props) {
             onSortingChange={setSorting}
             columnVisibility={columnVisibility}
             onColumnVisibilityChange={setColumnVisibility}
+            onSelectUser={setSelectedUser}
+            selectedUserId={selectedUser?.user_id ?? null}
           />
+          {selectedUser ? (
+            <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
+              <div className="mb-4 flex flex-col gap-2 border-b border-black/6 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">User detail</p>
+                  <h3 className="text-xl font-semibold tracking-tight text-slate-950">{selectedUser.primary_email}</h3>
+                </div>
+                <Button type="button" variant="outline" className="h-9 rounded-md px-3" onClick={() => setSelectedUser(null)}>
+                  Close
+                </Button>
+              </div>
+
+              {selectedUserDetailQuery.isLoading ? <p className="text-sm text-slate-500">Loading user detail...</p> : null}
+              {selectedUserDetailQuery.isError ? (
+                <p className="text-sm text-red-700">{(selectedUserDetailQuery.error as Error).message}</p>
+              ) : null}
+              {selectedUserDetailQuery.data?.data ? (
+                <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+                    <DetailStat label="Total tokens" value={selectedUserDetailQuery.data.data.usage.total_tokens.toLocaleString()} />
+                    <DetailStat label="LLM events" value={selectedUserDetailQuery.data.data.usage.total_events.toLocaleString()} />
+                    <DetailStat label="Activity events" value={selectedUserDetailQuery.data.data.activity.event_count.toLocaleString()} />
+                  </div>
+                  <div className="max-h-[22rem] overflow-auto border border-slate-200">
+                    {selectedUserDetailQuery.data.data.activity.events.map((event) => (
+                      <div key={event.activity_event_id} className="border-b border-slate-100 px-4 py-3">
+                        <p className="text-sm font-medium text-slate-950">{event.activity_summary || event.activity_kind}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {formatTimestampLabel(event.created_at_ts_ms)} · {event.surface} · {event.entity_kind}
+                        </p>
+                      </div>
+                    ))}
+                    {selectedUserDetailQuery.data.data.activity.events.length === 0 ? (
+                      <p className="px-4 py-6 text-sm text-slate-500">No activity recorded yet.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </>
       ) : null}
     </section>
+  )
+}
+
+function DetailStat(props: { label: string; value: string }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{props.label}</p>
+      <p className="mt-2 text-xl font-semibold tabular-nums tracking-tight text-slate-950">{props.value}</p>
+    </div>
   )
 }
