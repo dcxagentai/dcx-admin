@@ -21,6 +21,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 import {
@@ -511,16 +518,22 @@ export function DcxAdminUsersListPage(props: Props) {
             onSelectUser={setSelectedUser}
             selectedUserId={selectedUser?.user_id ?? null}
           />
-          {selectedUser ? (
-            <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-              <div className="mb-4 flex flex-col gap-2 border-b border-black/6 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <Sheet open={selectedUser !== null} onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setSelectedUser(null)
+            }
+          }}>
+            <SheetContent className="overflow-y-auto p-0 data-[side=right]:w-[92vw] data-[side=right]:max-w-[92vw] data-[side=right]:sm:max-w-[42rem]">
+              <SheetHeader className="sr-only">
+                <SheetTitle>{selectedUser?.primary_email ?? "User detail"}</SheetTitle>
+                <SheetDescription>User usage and activity detail</SheetDescription>
+              </SheetHeader>
+              <section className="bg-white px-6 py-5">
+              <div className="mb-4 flex flex-col gap-2 border-b border-black/6 pb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">User detail</p>
-                  <h3 className="text-xl font-semibold tracking-tight text-slate-950">{selectedUser.primary_email}</h3>
+                  <h3 className="text-xl font-semibold tracking-tight text-slate-950">{selectedUser?.primary_email}</h3>
                 </div>
-                <Button type="button" variant="outline" className="h-9 rounded-md px-3" onClick={() => setSelectedUser(null)}>
-                  Close
-                </Button>
               </div>
 
               {selectedUserDetailQuery.isLoading ? <p className="text-sm text-slate-500">Loading user detail...</p> : null}
@@ -549,8 +562,9 @@ export function DcxAdminUsersListPage(props: Props) {
                   </div>
                 </div>
               ) : null}
-            </section>
-          ) : null}
+              </section>
+            </SheetContent>
+          </Sheet>
         </>
       ) : null}
     </section>
