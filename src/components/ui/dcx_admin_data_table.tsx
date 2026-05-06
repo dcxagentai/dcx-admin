@@ -32,6 +32,7 @@ type Props<TData> = {
   columnVisibility?: VisibilityState
   onColumnVisibilityChange?: OnChangeFn<VisibilityState>
   pageSize?: number
+  hidePaginationFooter?: boolean
   onRowClick?: (row: TData) => void
   readRowClassName?: (row: TData) => string
 }
@@ -127,7 +128,7 @@ export function DcxAdminDataTable<TData>(props: Props<TData>) {
           )}
         </TableBody>
       </Table>
-      {totalRowCount > 0 ? (
+      {totalRowCount > 0 && props.hidePaginationFooter !== true ? (
         <div className="flex flex-col gap-3 px-6 pb-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">
             Showing {visibleRowStart}-{visibleRowEnd} of {totalRowCount}

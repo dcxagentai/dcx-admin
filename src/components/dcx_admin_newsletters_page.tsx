@@ -29,6 +29,11 @@ import {
   readDcxAdminNewsletterSendsCatalog,
   type DcxAdminNewsletterSendCatalogRow,
 } from "../lib/read_dcx_admin_newsletter_sends_catalog"
+import {
+  readDcxAdminNewsletterSendRecipients,
+  type DcxAdminNewsletterSendRecipientRow,
+  type DcxAdminNewsletterSendRecipientsPayload,
+} from "../lib/read_dcx_admin_newsletter_send_recipients"
 import { prepareDcxAdminNewsletterSend } from "../lib/prepare_dcx_admin_newsletter_send"
 import { cancelDcxAdminNewsletterSend } from "../lib/cancel_dcx_admin_newsletter_send"
 import {
@@ -60,6 +65,13 @@ import {
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
@@ -74,6 +86,7 @@ type Props = {
 type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs" | "shareholders"
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
+const newsletterRecipientColumnHelper = createColumnHelper<DcxAdminNewsletterSendRecipientRow>()
 
 function readNewsletterSendHeading(sendStatus: string): string {
   if (sendStatus === "cancelled") {
@@ -133,6 +146,26 @@ function readNewsletterSendStatusBadgeClass(sendStatus: string): string {
   return "border-slate-200 bg-slate-50 text-slate-600"
 }
 
+function readNewsletterRecipientStatusBadgeClass(deliveryStatus: string): string {
+  if (deliveryStatus === "delivered") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  }
+
+  if (deliveryStatus === "failed" || deliveryStatus === "bounced" || deliveryStatus === "complained") {
+    return "border-rose-200 bg-rose-50 text-rose-700"
+  }
+
+  if (deliveryStatus === "sent" || deliveryStatus === "sending") {
+    return "border-sky-200 bg-sky-50 text-sky-700"
+  }
+
+  if (deliveryStatus === "skipped" || deliveryStatus === "cancelled") {
+    return "border-slate-200 bg-slate-100 text-slate-600"
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-600"
+}
+
 function readNewsletterSendTimestampSummary(row: DcxAdminNewsletterSendCatalogRow, timezoneIanaName: string | null): string {
   if (row.send_status === "cancelled" && row.cancelled_at_ts_ms !== null) {
     return `Cancelled ${formatDcxAdminTimestampLabel(row.cancelled_at_ts_ms, timezoneIanaName)}`
@@ -147,6 +180,46 @@ function readNewsletterSendTimestampSummary(row: DcxAdminNewsletterSendCatalogRo
   }
 
   return `Scheduled ${formatDcxAdminTimestampLabel(row.scheduled_send_at_ts_ms, timezoneIanaName)}`
+}
+
+function readNewsletterRecipientOutcomeTimestamp(
+  row: DcxAdminNewsletterSendRecipientRow,
+): number | null {
+  return (
+    row.complained_at_ts_ms ??
+    row.bounced_at_ts_ms ??
+    row.failed_at_ts_ms ??
+    row.delivered_at_ts_ms ??
+    row.sent_at_ts_ms
+  )
+}
+
+function readNewsletterRecipientOutcomeLabel(row: DcxAdminNewsletterSendRecipientRow): string {
+  if (row.last_provider_event_type !== null && row.last_provider_event_type.trim() !== "") {
+    return row.last_provider_event_type
+  }
+
+  return row.delivery_status
+}
+
+function readDcxAdminNewsletterRecipientColumnWidthClassName(columnId: string): string {
+  if (columnId === "recipient_email") {
+    return "w-[15rem]"
+  }
+
+  if (columnId === "delivery_status" || columnId === "user_role") {
+    return "w-[8rem]"
+  }
+
+  if (columnId === "sent_at_ts_ms" || columnId === "outcome") {
+    return "w-[12rem]"
+  }
+
+  if (columnId === "provider_message_id") {
+    return "w-[15rem]"
+  }
+
+  return "w-[12rem]"
 }
 
 function buildDetailSnapshot(detail: DcxAdminNewsletterDetail): string {
@@ -355,11 +428,208 @@ function NewsletterMetadataCard(props: {
   )
 }
 
+function NewsletterSendRecipientsSheet(props: {
+  open: boolean
+  selectedSend: DcxAdminNewsletterSendCatalogRow | null
+  recipientsPayload: DcxAdminNewsletterSendRecipientsPayload | null
+  recipientsLoading: boolean
+  recipientsError: Error | null
+  emailSearch: string
+  onEmailSearchChange: (nextValue: string) => void
+  onOpenChange: (isOpen: boolean) => void
+  adminTimezoneIanaName: string | null
+}) {
+  const [recipientSorting, setRecipientSorting] = useState<SortingState>([])
+  const recipientColumns = useMemo<ColumnDef<DcxAdminNewsletterSendRecipientRow, any>[]>(
+    () => [
+      newsletterRecipientColumnHelper.accessor("recipient_email", {
+        header: "Email",
+        cell: (cellContext) => (
+          <span className="block truncate font-medium text-slate-950" title={cellContext.getValue()}>
+            {cellContext.getValue()}
+          </span>
+        ),
+      }),
+      newsletterRecipientColumnHelper.accessor("user_role", {
+        header: "Role",
+        cell: (cellContext) => (
+          <span className="capitalize text-slate-700">{cellContext.getValue() || "user"}</span>
+        ),
+      }),
+      newsletterRecipientColumnHelper.accessor("preferred_language", {
+        header: "Language",
+        cell: (cellContext) => {
+          const language = cellContext.getValue()
+          return (
+            <span className="text-slate-700">
+              {language ? `${language.language_name_native} (${language.language_code})` : "-"}
+            </span>
+          )
+        },
+      }),
+      newsletterRecipientColumnHelper.accessor("delivery_status", {
+        header: "Status",
+        cell: (cellContext) => (
+          <span
+            className={[
+              "inline-flex rounded-full border px-2.5 py-1 text-xs font-medium",
+              readNewsletterRecipientStatusBadgeClass(cellContext.getValue()),
+            ].join(" ")}
+          >
+            {cellContext.getValue()}
+          </span>
+        ),
+      }),
+      newsletterRecipientColumnHelper.accessor("sent_at_ts_ms", {
+        header: "Sent",
+        cell: (cellContext) => {
+          const timestamp = cellContext.getValue()
+          return (
+            <span className="text-slate-700">
+              {timestamp === null ? "-" : formatDcxAdminTimestampLabel(timestamp, props.adminTimezoneIanaName)}
+            </span>
+          )
+        },
+      }),
+      newsletterRecipientColumnHelper.display({
+        id: "outcome",
+        header: "Outcome",
+        cell: (cellContext) => {
+          const row = cellContext.row.original
+          const timestamp = readNewsletterRecipientOutcomeTimestamp(row)
+          return (
+            <div className="space-y-1">
+              <p className="text-sm text-slate-900">{readNewsletterRecipientOutcomeLabel(row)}</p>
+              <p className="text-xs text-slate-500">
+                {timestamp === null ? "-" : formatDcxAdminTimestampLabel(timestamp, props.adminTimezoneIanaName)}
+              </p>
+            </div>
+          )
+        },
+      }),
+      newsletterRecipientColumnHelper.accessor("provider_message_id", {
+        header: "Provider ID",
+        cell: (cellContext) => (
+          <span className="block truncate text-xs text-slate-500" title={cellContext.getValue() ?? ""}>
+            {cellContext.getValue() ?? "-"}
+          </span>
+        ),
+      }),
+      newsletterRecipientColumnHelper.accessor("failure_reason", {
+        header: "Failure",
+        cell: (cellContext) => (
+          <span className="block truncate text-xs text-rose-700" title={cellContext.getValue() ?? ""}>
+            {cellContext.getValue() ?? "-"}
+          </span>
+        ),
+      }),
+    ],
+    [props.adminTimezoneIanaName],
+  )
+
+  const summary = props.recipientsPayload?.summary
+  const visibleLimit = props.recipientsPayload?.visible_rows_limit ?? 25
+  const filteredCount = props.recipientsPayload?.filtered_recipient_count ?? 0
+  const visibleCount = props.recipientsPayload?.recipients.length ?? 0
+  const hasSearch = props.emailSearch.trim() !== ""
+
+  return (
+    <Sheet open={props.open} onOpenChange={props.onOpenChange}>
+      <SheetContent className="overflow-y-auto p-0 data-[side=right]:w-[96vw] data-[side=right]:max-w-[96vw] data-[side=right]:sm:max-w-[56rem]">
+        <SheetHeader className="border-b border-black/6 px-6 py-5 text-left">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Recipients</p>
+          <SheetTitle>
+            {props.selectedSend ? `Send ${props.selectedSend.email_send_id}` : "Newsletter send"}
+          </SheetTitle>
+          <SheetDescription>
+            Recipient delivery snapshot for this newsletter send.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="space-y-5 px-6 py-6">
+          {props.selectedSend ? (
+            <div className="border border-black/6 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <p>
+                {readNewsletterSendTimestampSummary(props.selectedSend, props.adminTimezoneIanaName)}
+              </p>
+              <p className="mt-1">
+                Audience: {readNewsletterSendAudienceScopeLabel(props.selectedSend.send_audience_scope)}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <NewsletterSendRecipientSummaryCard label="Total" value={summary?.total_recipient_count ?? 0} />
+            <NewsletterSendRecipientSummaryCard label="Delivered" value={summary?.delivered_recipient_count ?? 0} />
+            <NewsletterSendRecipientSummaryCard label="Failed" value={summary?.failed_recipient_count ?? 0} />
+            <NewsletterSendRecipientSummaryCard label="Bounced" value={summary?.bounced_recipient_count ?? 0} />
+            <NewsletterSendRecipientSummaryCard label="Complaints" value={summary?.complained_recipient_count ?? 0} />
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="w-full max-w-md space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Search email
+              </label>
+              <Input
+                value={props.emailSearch}
+                onChange={(event) => props.onEmailSearchChange(event.target.value)}
+                placeholder="Search recipient email..."
+                className="h-10 rounded-md"
+              />
+            </div>
+            <p className="text-sm text-slate-500">
+              {hasSearch
+                ? `Showing ${visibleCount} of ${filteredCount} matching recipients`
+                : `Showing first ${Math.min(visibleCount, visibleLimit)} of ${summary?.total_recipient_count ?? 0} recipients`}
+            </p>
+          </div>
+
+          {props.recipientsLoading ? (
+            <p className="text-sm text-slate-500">Loading recipient rows...</p>
+          ) : null}
+          {props.recipientsError ? (
+            <p className="text-sm text-red-600">
+              {(props.recipientsError as Error & { suggested_action?: string }).suggested_action ??
+                props.recipientsError.message}
+            </p>
+          ) : null}
+
+          <div className="overflow-hidden border border-black/6 bg-white">
+            <DcxAdminDataTable
+              columns={recipientColumns}
+              data={props.recipientsPayload?.recipients ?? []}
+              emptyLabel={hasSearch ? "No recipient emails match that search." : "No recipient rows found for this send."}
+              readColumnWidthClassName={readDcxAdminNewsletterRecipientColumnWidthClassName}
+              sorting={recipientSorting}
+              onSortingChange={setRecipientSorting}
+              pageSize={25}
+              hidePaginationFooter
+            />
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function NewsletterSendRecipientSummaryCard(props: { label: string; value: number }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+        {props.label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{props.value}</p>
+    </div>
+  )
+}
+
 function NewsletterSendRow(props: {
   row: DcxAdminNewsletterSendCatalogRow
   adminTimezoneIanaName: string | null
   onCancel: () => void
   cancelDisabled: boolean
+  onOpenRecipients: () => void
 }) {
   const awaitingProviderCount =
     props.row.pending_recipient_count + props.row.sending_recipient_count
@@ -447,6 +717,14 @@ function NewsletterSendRow(props: {
           Cancel prepared send
         </button>
       ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-4 h-10 rounded-full px-4"
+        onClick={props.onOpenRecipients}
+      >
+        Recipients
+      </Button>
     </div>
   )
 }
@@ -497,6 +775,23 @@ export function DcxAdminNewslettersPage(props: Props) {
         languageCode: props.routeLanguageCode ?? "en",
       }),
     enabled: Boolean(props.routeEmailKey && props.routeLanguageCode),
+  })
+  const [selectedRecipientSend, setSelectedRecipientSend] =
+    useState<DcxAdminNewsletterSendCatalogRow | null>(null)
+  const [recipientEmailSearch, setRecipientEmailSearch] = useState("")
+  const recipientsQuery = useQuery({
+    queryKey: [
+      "dcx_admin_newsletter_send_recipients",
+      selectedRecipientSend?.email_send_id,
+      recipientEmailSearch,
+    ],
+    queryFn: async () =>
+      readDcxAdminNewsletterSendRecipients({
+        apiBaseUrl: props.apiBaseUrl,
+        emailSendId: selectedRecipientSend?.email_send_id ?? 0,
+        emailSearch: recipientEmailSearch,
+      }),
+    enabled: selectedRecipientSend !== null,
   })
   const createDraftMutation = useMutation({
     mutationFn: async (params: { emailSubject: string; languageCode: string }) =>
@@ -1340,6 +1635,10 @@ export function DcxAdminNewslettersPage(props: Props) {
                     adminTimezoneIanaName={props.adminTimezoneIanaName}
                     onCancel={() => handleCancelPreparedSend(preparedSend.email_send_id)}
                     cancelDisabled={isSendMutationPending}
+                    onOpenRecipients={() => {
+                      setRecipientEmailSearch("")
+                      setSelectedRecipientSend(preparedSend)
+                    }}
                   />
                 ))}
                 {preparedSends.length === 0 && !sendsCatalogQuery.isLoading ? (
@@ -1347,6 +1646,22 @@ export function DcxAdminNewslettersPage(props: Props) {
                 ) : null}
               </div>
             </section>
+            <NewsletterSendRecipientsSheet
+              open={selectedRecipientSend !== null}
+              selectedSend={selectedRecipientSend}
+              recipientsPayload={recipientsQuery.data?.data ?? null}
+              recipientsLoading={recipientsQuery.isLoading}
+              recipientsError={recipientsQuery.error as Error | null}
+              emailSearch={recipientEmailSearch}
+              onEmailSearchChange={setRecipientEmailSearch}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) {
+                  setSelectedRecipientSend(null)
+                  setRecipientEmailSearch("")
+                }
+              }}
+              adminTimezoneIanaName={props.adminTimezoneIanaName}
+            />
           </div>
         ) : null}
       </article>
