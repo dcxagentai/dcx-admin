@@ -82,9 +82,13 @@ function renderLanguageLabel(user: DcxAdminUserListRow): string {
   return `${user.preferred_language.language_name_native} (${user.preferred_language.language_code})`
 }
 
-function normalizeDcxAdminDirectoryRole(userRole: string | null | undefined): "dev" | "admin" | "user" {
+function normalizeDcxAdminDirectoryRole(userRole: string | null | undefined): "dev" | "shareholder" | "admin" | "user" {
   if (userRole === "dev") {
     return "dev"
+  }
+
+  if (userRole === "shareholder" || userRole === "shareholders") {
+    return "shareholder"
   }
 
   if (userRole === "admin") {
@@ -97,6 +101,7 @@ function normalizeDcxAdminDirectoryRole(userRole: string | null | undefined): "d
 function buildDcxAdminDirectoryGroups(users: DcxAdminUserListRow[]) {
   return {
     dev: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "dev"),
+    shareholder: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "shareholder"),
     admin: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "admin"),
     user: users.filter((user) => normalizeDcxAdminDirectoryRole(user.user_role) === "user"),
   }
@@ -304,8 +309,10 @@ const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
 
 function DcxAdminUsersDirectoryTableSection(props: {
   title: string
+  titleBadge?: string
   users: DcxAdminUserListRow[]
   emptyLabel: string
+  tone?: "default" | "shareholder"
   sorting: SortingState
   onSortingChange: (nextValue: SortingState | ((old: SortingState) => SortingState)) => void
   columnVisibility: VisibilityState
@@ -317,10 +324,29 @@ function DcxAdminUsersDirectoryTableSection(props: {
   onSelectUser: (user: DcxAdminUserListRow) => void
   selectedUserId: number | null
 }) {
+  const isShareholderTone = props.tone === "shareholder"
+
   return (
-    <section className="overflow-hidden border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-      <div className="border-b border-black/6 px-6 py-5">
-        <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
+    <section
+      className={[
+        "overflow-hidden border bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
+        isShareholderTone ? "border-[#f08a24]/45 ring-1 ring-[#f08a24]/10" : "border-black/6",
+      ].join(" ")}
+    >
+      <div
+        className={[
+          "border-b px-6 py-5",
+          isShareholderTone ? "border-[#f08a24]/25 bg-[#fff8ef]" : "border-black/6",
+        ].join(" ")}
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
+          {props.titleBadge ? (
+            <span className="rounded-full border border-[#f08a24]/30 bg-white px-2.5 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#3a5b7f]">
+              {props.titleBadge}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -486,7 +512,7 @@ export function DcxAdminUsersListPage(props: Props) {
           </section>
 
           <DcxAdminUsersDirectoryTableSection
-            title="Dev"
+            title="Devs"
             users={groupedUsers.dev}
             emptyLabel="No dev users found yet."
             sorting={sorting}
@@ -497,7 +523,20 @@ export function DcxAdminUsersListPage(props: Props) {
             selectedUserId={selectedUser?.user_id ?? null}
           />
           <DcxAdminUsersDirectoryTableSection
-            title="Admin"
+            title="Shareholders"
+            titleBadge="Bosses group"
+            users={groupedUsers.shareholder}
+            emptyLabel="No shareholder users found yet."
+            tone="shareholder"
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnVisibility={columnVisibility}
+            onColumnVisibilityChange={setColumnVisibility}
+            onSelectUser={setSelectedUser}
+            selectedUserId={selectedUser?.user_id ?? null}
+          />
+          <DcxAdminUsersDirectoryTableSection
+            title="Admins"
             users={groupedUsers.admin}
             emptyLabel="No admin users found yet."
             sorting={sorting}
