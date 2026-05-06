@@ -35,7 +35,7 @@ export async function saveDcxAdminEmailSequenceAndSteps(params: {
   sequenceKey: string
   sequenceName: string
   sequenceType: "campaign" | "onboarding"
-  audienceType: "newsletters" | "all_email"
+  audienceType: "newsletters" | "all_email" | "admins" | "devs" | "shareholders"
   triggerType: "user_signup" | "manual_launch" | "scheduled_launch"
   scheduledLaunchAtTsMs: number | null
   isLive: boolean

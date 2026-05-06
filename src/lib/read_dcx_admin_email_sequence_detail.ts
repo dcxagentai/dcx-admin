@@ -25,7 +25,7 @@ export type DcxAdminEmailSequenceDetail = {
   sequence_key: string
   sequence_name: string
   sequence_type: "campaign" | "onboarding"
-  audience_type: "newsletters" | "all_email"
+  audience_type: "newsletters" | "all_email" | "admins" | "devs" | "shareholders"
   trigger_type: "user_signup" | "manual_launch" | "scheduled_launch"
   scheduled_launch_at_ts_ms: number | null
   is_live: boolean

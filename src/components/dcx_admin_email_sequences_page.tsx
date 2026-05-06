@@ -31,9 +31,16 @@ import {
   type DcxAdminEmailSequenceSaveDraftStep,
 } from "../lib/save_dcx_admin_email_sequence_and_steps"
 import { readDcxAdminLiveEmailsCatalog } from "../lib/read_dcx_admin_live_emails_catalog"
+import {
+  buildDcxAdminDateInputValueFromTimestamp,
+  buildDcxAdminTimeInputValueFromTimestamp,
+  formatDcxAdminTimestampLabel,
+  readDcxAdminTimestampFromDateAndTime,
+} from "../lib/dcx_admin_timezone_datetime"
 
 type Props = {
   apiBaseUrl: string
+  adminTimezoneIanaName: string | null
   routeSequenceKey: string | null
   onOpenSequence: (params: { sequenceKey: string }) => void
   onReturnToCatalog: () => void
@@ -42,7 +49,7 @@ type Props = {
 type SequenceDraft = {
   sequence_name: string
   sequence_type: "campaign" | "onboarding"
-  audience_type: "newsletters" | "all_email"
+  audience_type: "newsletters" | "all_email" | "admins" | "devs" | "shareholders"
   trigger_type: "user_signup" | "manual_launch" | "scheduled_launch"
   scheduled_launch_date: string
   scheduled_launch_time: string
@@ -52,57 +59,14 @@ type SequenceDraft = {
 
 const sequenceCatalogColumnHelper = createColumnHelper<DcxAdminEmailSequenceCatalogRow>()
 
-function formatTimestampLabel(timestampMs: number | null): string {
-  if (typeof timestampMs !== "number") {
-    return "Not set"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(timestampMs),
-  )
-}
-
-function buildTimeInputValue(timestampMs: number | null): string {
-  if (typeof timestampMs !== "number") {
-    return ""
-  }
-
-  const candidateDate = new Date(timestampMs)
-  const pad = (value: number) => value.toString().padStart(2, "0")
-  return `${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
-}
-
-function buildDateInputValue(timestampMs: number | null): string {
-  if (typeof timestampMs !== "number") {
-    return ""
-  }
-
-  const candidateDate = new Date(timestampMs)
-  const pad = (value: number) => value.toString().padStart(2, "0")
-  return `${candidateDate.getFullYear()}-${pad(candidateDate.getMonth() + 1)}-${pad(candidateDate.getDate())}`
-}
-
-function readTimestampFromDateAndTime(dateValue: string, timeValue: string): number | null {
-  if (dateValue.trim() === "" || timeValue.trim() === "") {
-    return null
-  }
-
-  const candidateDate = new Date(`${dateValue}T${timeValue}:00`)
-  if (Number.isNaN(candidateDate.getTime())) {
-    return null
-  }
-
-  return candidateDate.getTime()
-}
-
-function buildSequenceDraftFromDetail(detail: DcxAdminEmailSequenceDetail): SequenceDraft {
+function buildSequenceDraftFromDetail(detail: DcxAdminEmailSequenceDetail, timezoneIanaName: string | null): SequenceDraft {
   return {
     sequence_name: detail.sequence_name,
     sequence_type: detail.sequence_type,
     audience_type: detail.audience_type,
     trigger_type: detail.trigger_type,
-    scheduled_launch_date: buildDateInputValue(detail.scheduled_launch_at_ts_ms),
-    scheduled_launch_time: buildTimeInputValue(detail.scheduled_launch_at_ts_ms),
+    scheduled_launch_date: buildDcxAdminDateInputValueFromTimestamp(detail.scheduled_launch_at_ts_ms, timezoneIanaName),
+    scheduled_launch_time: buildDcxAdminTimeInputValueFromTimestamp(detail.scheduled_launch_at_ts_ms, timezoneIanaName),
     is_live: detail.is_live,
     steps: detail.steps.map((step) => ({
       step_key: step.step_key,
@@ -122,6 +86,22 @@ function buildSourceEmailOptionLabel(emailRow: {
   language: { language_code: string }
 }): string {
   return `${emailRow.email_subject} · ${emailRow.email_type} · ${emailRow.language.language_code} · ${emailRow.email_key}`
+}
+
+function readSequenceAudienceLabel(audienceType: SequenceDraft["audience_type"] | DcxAdminEmailSequenceCatalogRow["audience_type"]): string {
+  if (audienceType === "admins") {
+    return "Admins only"
+  }
+  if (audienceType === "devs") {
+    return "Devs only"
+  }
+  if (audienceType === "shareholders") {
+    return "Shareholders"
+  }
+  if (audienceType === "newsletters") {
+    return "Newsletters audience"
+  }
+  return "All promotional email"
 }
 
 function readSequenceCatalogStateLabel(sequence: DcxAdminEmailSequenceCatalogRow): string {
@@ -179,7 +159,11 @@ export function DcxAdminEmailSequencesPage(props: Props) {
         triggerType: draft.trigger_type,
         scheduledLaunchAtTsMs:
           draft.trigger_type === "scheduled_launch"
-            ? readTimestampFromDateAndTime(draft.scheduled_launch_date, draft.scheduled_launch_time)
+            ? readDcxAdminTimestampFromDateAndTime(
+                draft.scheduled_launch_date,
+                draft.scheduled_launch_time,
+                props.adminTimezoneIanaName,
+              )
             : null,
         isLive: draft.is_live,
         steps: draft.steps,
@@ -194,10 +178,10 @@ export function DcxAdminEmailSequencesPage(props: Props) {
 
   useEffect(() => {
     if (detailQuery.data?.data) {
-      setSequenceDraft(buildSequenceDraftFromDetail(detailQuery.data.data))
+      setSequenceDraft(buildSequenceDraftFromDetail(detailQuery.data.data, props.adminTimezoneIanaName))
       setStatusText("Sequence ready to edit. Save when the metadata and steps look right.")
     }
-  }, [detailQuery.data?.data])
+  }, [detailQuery.data?.data, props.adminTimezoneIanaName])
 
   const sequences = catalogQuery.data?.data.sequences ?? []
   const detail = detailQuery.data?.data ?? null
@@ -212,6 +196,7 @@ export function DcxAdminEmailSequencesPage(props: Props) {
         sequence.sequence_name.toLowerCase().includes(normalizedFilter) ||
         sequence.sequence_key.toLowerCase().includes(normalizedFilter) ||
         sequence.sequence_type.toLowerCase().includes(normalizedFilter) ||
+        sequence.audience_type.toLowerCase().includes(normalizedFilter) ||
         sequence.trigger_type.toLowerCase().includes(normalizedFilter)
       )
     })
@@ -239,6 +224,11 @@ export function DcxAdminEmailSequencesPage(props: Props) {
         id: "sequence_type",
         header: "Type",
       }),
+      sequenceCatalogColumnHelper.accessor("audience_type", {
+        id: "audience_type",
+        header: "Audience",
+        cell: ({ row }) => readSequenceAudienceLabel(row.original.audience_type),
+      }),
       sequenceCatalogColumnHelper.accessor("trigger_type", {
         id: "trigger_type",
         header: "Trigger",
@@ -255,10 +245,10 @@ export function DcxAdminEmailSequencesPage(props: Props) {
       sequenceCatalogColumnHelper.accessor("updated_at_ts_ms", {
         id: "updated_at_ts_ms",
         header: "Updated",
-        cell: ({ row }) => formatTimestampLabel(row.original.updated_at_ts_ms),
+        cell: ({ row }) => formatDcxAdminTimestampLabel(row.original.updated_at_ts_ms, props.adminTimezoneIanaName),
       }),
     ],
-    [],
+    [props.adminTimezoneIanaName],
   )
 
   const isCatalogRoute = props.routeSequenceKey === null
@@ -297,9 +287,10 @@ export function DcxAdminEmailSequencesPage(props: Props) {
     }
 
     if (sequenceDraft.trigger_type === "scheduled_launch") {
-      const scheduledLaunchAtTsMs = readTimestampFromDateAndTime(
+      const scheduledLaunchAtTsMs = readDcxAdminTimestampFromDateAndTime(
         sequenceDraft.scheduled_launch_date,
         sequenceDraft.scheduled_launch_time,
+        props.adminTimezoneIanaName,
       )
       if (scheduledLaunchAtTsMs === null) {
         setStatusText("Choose one valid date and time before saving a scheduled-launch sequence.")
@@ -478,6 +469,9 @@ export function DcxAdminEmailSequencesPage(props: Props) {
                   <SelectContent>
                     <SelectItem value="all_email">All promotional email</SelectItem>
                     <SelectItem value="newsletters">Newsletters audience</SelectItem>
+                    <SelectItem value="admins">Admins only</SelectItem>
+                    <SelectItem value="devs">Devs only</SelectItem>
+                    <SelectItem value="shareholders">Shareholders</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -740,11 +734,11 @@ export function DcxAdminEmailSequencesPage(props: Props) {
             <section className="grid gap-4 xl:grid-cols-4">
               <div className="border border-black/6 bg-slate-50 px-4 py-4 text-sm text-slate-700">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Created</p>
-                <p className="mt-2">{formatTimestampLabel(detail?.created_at_ts_ms ?? null)}</p>
+                <p className="mt-2">{formatDcxAdminTimestampLabel(detail?.created_at_ts_ms ?? null, props.adminTimezoneIanaName)}</p>
               </div>
               <div className="border border-black/6 bg-slate-50 px-4 py-4 text-sm text-slate-700">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Updated</p>
-                <p className="mt-2">{formatTimestampLabel(detail?.updated_at_ts_ms ?? null)}</p>
+                <p className="mt-2">{formatDcxAdminTimestampLabel(detail?.updated_at_ts_ms ?? null, props.adminTimezoneIanaName)}</p>
               </div>
               <div className="border border-black/6 bg-slate-50 px-4 py-4 text-sm text-slate-700">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Steps</p>
@@ -754,11 +748,13 @@ export function DcxAdminEmailSequencesPage(props: Props) {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Launch</p>
                 <p className="mt-2">
                   {sequenceDraft.trigger_type === "scheduled_launch"
-                    ? formatTimestampLabel(
-                        readTimestampFromDateAndTime(
+                    ? formatDcxAdminTimestampLabel(
+                        readDcxAdminTimestampFromDateAndTime(
                           sequenceDraft.scheduled_launch_date,
                           sequenceDraft.scheduled_launch_time,
+                          props.adminTimezoneIanaName,
                         ),
+                        props.adminTimezoneIanaName,
                       )
                     : sequenceDraft.trigger_type}
                 </p>

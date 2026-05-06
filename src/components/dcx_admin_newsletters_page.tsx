@@ -39,6 +39,13 @@ import {
   type DcxAdminEditableFieldVisualState,
 } from "../lib/dcx_admin_editable_field_visuals"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
+import {
+  buildDcxAdminCalendarDateFromTimestamp,
+  buildDcxAdminTimeInputValueFromTimestamp,
+  formatDcxAdminCalendarDateLabel,
+  formatDcxAdminTimestampLabel,
+  readDcxAdminTimestampFromCalendarDateAndTime,
+} from "../lib/dcx_admin_timezone_datetime"
 import { DcxAdminUnifiedTranslationLanguageSelector } from "./dcx_admin_translation_language_controls"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -57,6 +64,7 @@ import { Textarea } from "@/components/ui/textarea"
 
 type Props = {
   apiBaseUrl: string
+  adminTimezoneIanaName: string | null
   routeEmailKey: string | null
   routeLanguageCode: string | null
   onOpenNewsletter: (params: { emailKey: string; languageCode: string }) => void
@@ -66,16 +74,6 @@ type Props = {
 type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs"
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
-
-function formatTimestampLabel(timestampMs: number | null): string {
-  if (typeof timestampMs !== "number") {
-    return "Not set"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(timestampMs),
-  )
-}
 
 function readNewsletterSendHeading(sendStatus: string): string {
   if (sendStatus === "cancelled") {
@@ -131,66 +129,20 @@ function readNewsletterSendStatusBadgeClass(sendStatus: string): string {
   return "border-slate-200 bg-slate-50 text-slate-600"
 }
 
-function readNewsletterSendTimestampSummary(row: DcxAdminNewsletterSendCatalogRow): string {
+function readNewsletterSendTimestampSummary(row: DcxAdminNewsletterSendCatalogRow, timezoneIanaName: string | null): string {
   if (row.send_status === "cancelled" && row.cancelled_at_ts_ms !== null) {
-    return `Cancelled ${formatTimestampLabel(row.cancelled_at_ts_ms)}`
+    return `Cancelled ${formatDcxAdminTimestampLabel(row.cancelled_at_ts_ms, timezoneIanaName)}`
   }
 
   if (row.send_completed_at_ts_ms !== null) {
-    return `Completed ${formatTimestampLabel(row.send_completed_at_ts_ms)}`
+    return `Completed ${formatDcxAdminTimestampLabel(row.send_completed_at_ts_ms, timezoneIanaName)}`
   }
 
   if (row.send_started_at_ts_ms !== null) {
-    return `Started ${formatTimestampLabel(row.send_started_at_ts_ms)}`
+    return `Started ${formatDcxAdminTimestampLabel(row.send_started_at_ts_ms, timezoneIanaName)}`
   }
 
-  return `Scheduled ${formatTimestampLabel(row.scheduled_send_at_ts_ms)}`
-}
-
-function formatCalendarDateLabel(value: Date | undefined): string {
-  if (!value) {
-    return "Choose send date"
-  }
-
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(value)
-}
-
-function buildTimeInputValue(timestampMs: number | null): string {
-  if (typeof timestampMs !== "number") {
-    return ""
-  }
-
-  const candidateDate = new Date(timestampMs)
-  const pad = (value: number) => value.toString().padStart(2, "0")
-  return `${pad(candidateDate.getHours())}:${pad(candidateDate.getMinutes())}`
-}
-
-function readTimestampFromScheduledSendParts(dateValue: Date | undefined, timeValue: string): number | null {
-  if (!dateValue || timeValue.trim() === "") {
-    return null
-  }
-
-  const [hoursText, minutesText] = timeValue.split(":")
-  const hours = Number(hoursText)
-  const minutes = Number(minutesText)
-  if (
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes) ||
-    hours < 0 ||
-    hours > 23 ||
-    minutes < 0 ||
-    minutes > 59
-  ) {
-    return null
-  }
-
-  const parsedDate = new Date(dateValue)
-  parsedDate.setHours(hours, minutes, 0, 0)
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null
-  }
-
-  return parsedDate.getTime()
+  return `Scheduled ${formatDcxAdminTimestampLabel(row.scheduled_send_at_ts_ms, timezoneIanaName)}`
 }
 
 function buildDetailSnapshot(detail: DcxAdminNewsletterDetail): string {
@@ -366,6 +318,7 @@ function NewsletterContentComparisonCard(props: {
 function NewsletterMetadataCard(props: {
   eyebrow: string
   detail: DcxAdminNewsletterDetail | null
+  adminTimezoneIanaName: string | null
 }) {
   return (
     <article className="border border-black/6 bg-white px-6 py-6 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -388,7 +341,10 @@ function NewsletterMetadataCard(props: {
             label="Translation of ID"
             value={props.detail.translation_of_id === null ? "Not linked" : String(props.detail.translation_of_id)}
           />
-          <MetadataRow label="Updated at" value={formatTimestampLabel(props.detail.updated_at_ts_ms)} />
+          <MetadataRow
+            label="Updated at"
+            value={formatDcxAdminTimestampLabel(props.detail.updated_at_ts_ms, props.adminTimezoneIanaName)}
+          />
         </dl>
       ) : null}
     </article>
@@ -397,6 +353,7 @@ function NewsletterMetadataCard(props: {
 
 function NewsletterSendRow(props: {
   row: DcxAdminNewsletterSendCatalogRow
+  adminTimezoneIanaName: string | null
   onCancel: () => void
   cancelDisabled: boolean
 }) {
@@ -416,7 +373,7 @@ function NewsletterSendRow(props: {
             {readNewsletterSendHeading(props.row.send_status)}
           </p>
           <p className="text-xs text-slate-500">
-            {readNewsletterSendTimestampSummary(props.row)}
+            {readNewsletterSendTimestampSummary(props.row, props.adminTimezoneIanaName)}
           </p>
         </div>
         <div
@@ -681,8 +638,8 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
 
     const defaultScheduledSendAtTsMs = Date.now() + 60 * 60 * 1000
-    setScheduledSendDate(new Date(defaultScheduledSendAtTsMs))
-    setScheduledSendTime(buildTimeInputValue(defaultScheduledSendAtTsMs))
+    setScheduledSendDate(buildDcxAdminCalendarDateFromTimestamp(defaultScheduledSendAtTsMs, props.adminTimezoneIanaName))
+    setScheduledSendTime(buildDcxAdminTimeInputValueFromTimestamp(defaultScheduledSendAtTsMs, props.adminTimezoneIanaName))
     if ((detail.language_readiness.total_blocked_missing_translation_count ?? 0) > 0) {
       setSendStatusText(
         `This newsletter still needs translations before sending. ${detail.language_readiness.total_blocked_missing_translation_count} eligible recipients are currently blocked by missing language coverage.`,
@@ -693,7 +650,7 @@ export function DcxAdminNewslettersPage(props: Props) {
     setSendStatusText(
       "Prepare one send now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
     )
-  }, [detail?.email_id])
+  }, [detail?.email_id, props.adminTimezoneIanaName])
 
   useEffect(() => {
     return () => {
@@ -754,7 +711,11 @@ export function DcxAdminNewslettersPage(props: Props) {
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
   const isAnyWritePending =
     createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
-  const scheduledSendAtTsMs = readTimestampFromScheduledSendParts(scheduledSendDate, scheduledSendTime)
+  const scheduledSendAtTsMs = readDcxAdminTimestampFromCalendarDateAndTime(
+    scheduledSendDate,
+    scheduledSendTime,
+    props.adminTimezoneIanaName,
+  )
   const isSendMutationPending = prepareSendMutation.isPending || cancelSendMutation.isPending
   const hasMissingNewsletterLanguagesForEligibleUsers =
     (detail?.language_readiness.total_blocked_missing_translation_count ?? 0) > 0
@@ -798,12 +759,12 @@ export function DcxAdminNewslettersPage(props: Props) {
         header: ({ column }) => <DcxAdminSortableHeader column={column} title="Updated" />,
         cell: ({ row }) => (
           <span className="whitespace-nowrap text-sm text-slate-900">
-            {formatTimestampLabel(row.original.updated_at_ts_ms)}
+            {formatDcxAdminTimestampLabel(row.original.updated_at_ts_ms, props.adminTimezoneIanaName)}
           </span>
         ),
       }),
     ],
-    [],
+    [props.adminTimezoneIanaName],
   )
 
   async function persistCurrentDraft(): Promise<void> {
@@ -870,7 +831,7 @@ export function DcxAdminNewslettersPage(props: Props) {
         sendAudienceScope,
       })
       setSendStatusText(
-        `Prepared one newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}. The worker will pick it up and update this section as provider events arrive.`,
+        `Prepared one newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatDcxAdminTimestampLabel(payload.data.scheduled_send_at_ts_ms, props.adminTimezoneIanaName)}. The worker will pick it up and update this section as provider events arrive.`,
       )
     } catch (error) {
       setSendStatusText(
@@ -892,7 +853,7 @@ export function DcxAdminNewslettersPage(props: Props) {
         sendAudienceScope,
       })
       setSendStatusText(
-        `Prepared one scheduled newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatTimestampLabel(payload.data.scheduled_send_at_ts_ms)}. Delivery outcomes will appear here after dispatch starts.`,
+        `Prepared one scheduled newsletter send for ${readNewsletterSendAudienceScopeLabel(payload.data.send_audience_scope).toLowerCase()} at ${formatDcxAdminTimestampLabel(payload.data.scheduled_send_at_ts_ms, props.adminTimezoneIanaName)}. Delivery outcomes will appear here after dispatch starts.`,
       )
     } catch (error) {
       setSendStatusText(
@@ -1179,7 +1140,11 @@ export function DcxAdminNewslettersPage(props: Props) {
                   </div>
                 </div>
 
-                <NewsletterMetadataCard eyebrow="Template metadata" detail={detail} />
+                <NewsletterMetadataCard
+                  eyebrow="Template metadata"
+                  detail={detail}
+                  adminTimezoneIanaName={props.adminTimezoneIanaName}
+                />
               </>
             ) : (
               <>
@@ -1200,8 +1165,16 @@ export function DcxAdminNewslettersPage(props: Props) {
                 </div>
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <NewsletterMetadataCard eyebrow="Original metadata" detail={originalDetail} />
-                  <NewsletterMetadataCard eyebrow="Selected metadata" detail={detail} />
+                  <NewsletterMetadataCard
+                    eyebrow="Original metadata"
+                    detail={originalDetail}
+                    adminTimezoneIanaName={props.adminTimezoneIanaName}
+                  />
+                  <NewsletterMetadataCard
+                    eyebrow="Selected metadata"
+                    detail={detail}
+                    adminTimezoneIanaName={props.adminTimezoneIanaName}
+                  />
                 </div>
               </>
             )}
@@ -1306,7 +1279,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                       variant="outline"
                       className="h-11 justify-between px-4 text-sm font-normal"
                     >
-                      <span>{formatCalendarDateLabel(scheduledSendDate)}</span>
+                      <span>{formatDcxAdminCalendarDateLabel(scheduledSendDate)}</span>
                       <CalendarDaysIcon className="size-4 text-slate-500" />
                     </Button>
                   </PopoverTrigger>
@@ -1359,6 +1332,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                   <NewsletterSendRow
                     key={preparedSend.email_send_id}
                     row={preparedSend}
+                    adminTimezoneIanaName={props.adminTimezoneIanaName}
                     onCancel={() => handleCancelPreparedSend(preparedSend.email_send_id)}
                     cancelDisabled={isSendMutationPending}
                   />

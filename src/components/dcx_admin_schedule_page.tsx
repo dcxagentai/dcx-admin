@@ -14,19 +14,15 @@ import {
   readDcxAdminScheduleOperationsCatalog,
   type DcxAdminScheduleOperationRow,
 } from "../lib/read_dcx_admin_schedule_operations_catalog"
+import { formatDcxAdminTimestampLabel } from "../lib/dcx_admin_timezone_datetime"
 import { DcxAdminDataTable } from "@/components/ui/dcx_admin_data_table"
 
 type Props = {
   apiBaseUrl: string
+  adminTimezoneIanaName: string | null
 }
 
 const scheduleColumnHelper = createColumnHelper<DcxAdminScheduleOperationRow>()
-
-function formatTimestampLabel(timestampMs: number): string {
-  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(timestampMs),
-  )
-}
 
 function readAudienceLabel(audienceScope: string): string {
   if (audienceScope === "admins") {
@@ -34,6 +30,9 @@ function readAudienceLabel(audienceScope: string): string {
   }
   if (audienceScope === "devs") {
     return "Devs only"
+  }
+  if (audienceScope === "shareholders") {
+    return "Shareholders"
   }
   if (audienceScope === "newsletters") {
     return "Newsletters audience"
@@ -69,7 +68,7 @@ export function DcxAdminSchedulePage(props: Props) {
       scheduleColumnHelper.accessor("scheduled_at_ts_ms", {
         id: "scheduled_at_ts_ms",
         header: "Scheduled for",
-        cell: ({ row }) => formatTimestampLabel(row.original.scheduled_at_ts_ms),
+        cell: ({ row }) => formatDcxAdminTimestampLabel(row.original.scheduled_at_ts_ms, props.adminTimezoneIanaName),
       }),
       scheduleColumnHelper.accessor("status", {
         id: "status",
@@ -91,7 +90,7 @@ export function DcxAdminSchedulePage(props: Props) {
         header: "Surface",
       }),
     ],
-    [],
+    [props.adminTimezoneIanaName],
   )
 
   return (

@@ -832,6 +832,7 @@ function App() {
   const authenticatedSessionSummary = isSessionExplicitlyMissing
     ? null
     : authenticatedSessionQuery.data?.data ?? null
+  const adminTimezoneIanaName = authenticatedSessionSummary?.preferred_timezone?.iana_name ?? null
 
   useEffect(() => {
     if (
@@ -941,6 +942,7 @@ function App() {
       {activeScreen === "schedule" ? (
         <DcxAdminSchedulePage
           apiBaseUrl={apiBaseUrl}
+          adminTimezoneIanaName={adminTimezoneIanaName}
         />
       ) : null}
 
@@ -989,6 +991,7 @@ function App() {
       {activeScreen === "newsletters" ? (
         <DcxAdminNewslettersPage
           apiBaseUrl={apiBaseUrl}
+          adminTimezoneIanaName={adminTimezoneIanaName}
           routeLanguageCode={routeLanguageCode}
           routeEmailKey={routeNewsletterKey}
           onOpenNewsletter={(params) => navigateToPathname(buildPathnameForNewsletter(params))}
@@ -999,6 +1002,7 @@ function App() {
       {activeScreen === "email_sequences" ? (
         <DcxAdminEmailSequencesPage
           apiBaseUrl={apiBaseUrl}
+          adminTimezoneIanaName={adminTimezoneIanaName}
           routeSequenceKey={routeEmailKey}
           onOpenSequence={(params) => navigateToPathname(buildPathnameForEmailSequence(params))}
           onReturnToCatalog={() => navigateToPathname("/content/emails/sequences")}

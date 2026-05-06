@@ -38,6 +38,11 @@ export type DcxAuthenticatedSessionSummary = {
   primary_email: string
   user_role: string
   account_status: string
+  preferred_timezone: {
+    id: number
+    iana_name: string
+    display_label: string
+  } | null
   allowed_surfaces: {
     app: boolean
     admin: boolean
