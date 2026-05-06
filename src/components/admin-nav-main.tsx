@@ -187,7 +187,7 @@ function AdminNavMainTreeItem(props: {
 
 export function AdminNavMain(props: {
   items: AdminNavMainItem[]
-  groupLabel: string
+  groupLabel?: string
   toggleSectionLabel: string
   onNavigateWithinAdmin: (nextPathname: string) => void
 }) {
@@ -219,7 +219,7 @@ export function AdminNavMain(props: {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{props.groupLabel}</SidebarGroupLabel>
+      {props.groupLabel ? <SidebarGroupLabel>{props.groupLabel}</SidebarGroupLabel> : null}
       <SidebarMenu>
         {props.items.map((item) => (
           <AdminNavMainTreeItem

@@ -924,6 +924,7 @@ function App() {
 
   return (
     <DcxAdminShell
+      apiBaseUrl={apiBaseUrl}
       title={readDcxAdminScreenTitle(activeScreen)}
       currentPathname={routeState.pathname}
       userEmail={authenticatedSessionSummary.primary_email}

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
 import dcxLogo from "@/assets/dcx_logo.png"
 import {
   CalendarDaysIcon,
@@ -17,13 +18,20 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import {
+  readDcxAdminAuthenticatedUserClockTimezones,
+  type DcxAdminAuthenticatedUserClockTimezone,
+} from "@/lib/read_dcx_admin_authenticated_user_clock_timezones"
 
 type Props = React.ComponentProps<typeof Sidebar> & {
+  apiBaseUrl: string
   currentPathname: string
   userEmail: string | null
   userRole: string | null
@@ -182,6 +190,7 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
 }
 
 export function AdminSidebar({
+  apiBaseUrl,
   currentPathname,
   userEmail,
   userRole,
@@ -191,6 +200,15 @@ export function AdminSidebar({
   isLogoutPending,
   ...props
 }: Props) {
+  const clockTimezonesQuery = useQuery({
+    queryKey: ["dcx_admin_authenticated_user_clock_timezones"],
+    queryFn: async () =>
+      readDcxAdminAuthenticatedUserClockTimezones({
+        apiBaseUrl,
+      }),
+  })
+  const clockTimezones = clockTimezonesQuery.data?.data ?? null
+
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
@@ -216,9 +234,12 @@ export function AdminSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
+        <DcxAdminSidebarTradingClocks
+          preferredTimezone={clockTimezones?.preferred_timezone ?? null}
+          sidebarClockTimezones={clockTimezones?.selected_sidebar_clock_timezones ?? []}
+        />
         <AdminNavMain
           items={readAdminNavMainItems(currentPathname)}
-          groupLabel="Workspace"
           toggleSectionLabel="Toggle section"
           onNavigateWithinAdmin={onNavigateWithinAdmin}
         />
@@ -245,4 +266,170 @@ export function AdminSidebar({
       </SidebarFooter>
     </Sidebar>
   )
+}
+
+function DcxAdminSidebarTradingClocks(props: {
+  preferredTimezone: DcxAdminAuthenticatedUserClockTimezone | null
+  sidebarClockTimezones: DcxAdminAuthenticatedUserClockTimezone[]
+}) {
+  const [now, setNow] = React.useState(() => new Date())
+  React.useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const clockTimezones = readDcxAdminSidebarClockTimezones({
+    preferredTimezone: props.preferredTimezone,
+    sidebarClockTimezones: props.sidebarClockTimezones,
+  })
+
+  if (clockTimezones.length === 0) {
+    return null
+  }
+
+  return (
+    <SidebarGroup className="pt-2 group-data-[collapsible=icon]:hidden">
+      <SidebarGroupContent>
+        <div className="grid grid-cols-3 gap-1 px-1.5 pb-2 pt-1">
+          {clockTimezones.map((timezone) => (
+            <div
+              key={`${timezone.kind}:${timezone.id}`}
+              className="flex justify-center text-center"
+            >
+              <DcxAdminSidebarTradingClock
+                timezone={timezone}
+                now={now}
+              />
+            </div>
+          ))}
+        </div>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  )
+}
+
+function DcxAdminSidebarTradingClock(props: {
+  timezone: DcxAdminAuthenticatedUserClockTimezone & { kind: "preferred" | "selected" }
+  now: Date
+}) {
+  const timeParts = readDcxAdminSidebarClockTimeParts(props.timezone.iana_name, props.now)
+  const hourAngle = ((timeParts.hour % 12) + timeParts.minute / 60 + timeParts.second / 3600) * 30
+  const minuteAngle = (timeParts.minute + timeParts.second / 60) * 6
+  const secondAngle = timeParts.second * 6
+  const clockNumerals = Array.from({ length: 12 }, (_, numeralIndex) => numeralIndex + 1)
+
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-1">
+      <svg
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label={`${readDcxAdminSidebarClockLabel(props.timezone)} local time`}
+        className="size-[4.35rem]"
+      >
+        <circle cx="50" cy="50" r="48" className="fill-white stroke-slate-100" strokeWidth="1" />
+        <circle cx="50" cy="50" r="47" className="fill-transparent stroke-slate-200" strokeWidth="1.2" />
+        {clockNumerals.map((numeral) => {
+          const numeralCoordinates = readDcxAdminSidebarClockHandCoordinates(numeral * 30, 36)
+          return (
+            <text
+              key={numeral}
+              x={numeralCoordinates.x}
+              y={numeralCoordinates.y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="fill-slate-500 text-[8.5px] font-semibold"
+            >
+              {numeral}
+            </text>
+          )
+        })}
+        {Array.from({ length: 60 }).map((_, tickIndex) => {
+          if (tickIndex % 5 !== 0) {
+            return null
+          }
+          const tickAngle = tickIndex * 6
+          const tickStart = readDcxAdminSidebarClockHandCoordinates(tickAngle, 42)
+          const tickEnd = readDcxAdminSidebarClockHandCoordinates(tickAngle, 44)
+          return (
+            <line
+              key={tickIndex}
+              x1={tickStart.x}
+              y1={tickStart.y}
+              x2={tickEnd.x}
+              y2={tickEnd.y}
+              className="stroke-slate-300"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          )
+        })}
+        <line x1="50" y1="50" x2="50" y2="32" className="stroke-[#314f70]" strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="17" className="stroke-[#3a5b7f]" strokeWidth="3" strokeLinecap="round" transform={`rotate(${minuteAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="14" className="stroke-[#f08a24]" strokeWidth="1.5" strokeLinecap="round" transform={`rotate(${secondAngle} 50 50)`} />
+        <circle cx="50" cy="50" r="3.5" className="fill-slate-400" />
+      </svg>
+      <span className="max-w-[4.35rem] truncate text-[0.66rem] font-semibold leading-none text-sidebar-foreground">
+        {readDcxAdminSidebarClockLabel(props.timezone)}
+      </span>
+    </div>
+  )
+}
+
+function readDcxAdminSidebarClockTimezones(params: {
+  preferredTimezone: DcxAdminAuthenticatedUserClockTimezone | null
+  sidebarClockTimezones: DcxAdminAuthenticatedUserClockTimezone[]
+}): Array<DcxAdminAuthenticatedUserClockTimezone & { kind: "preferred" | "selected" }> {
+  const seenTimezoneIds = new Set<number>()
+  const clockTimezones: Array<DcxAdminAuthenticatedUserClockTimezone & { kind: "preferred" | "selected" }> = []
+  if (params.preferredTimezone) {
+    clockTimezones.push({ ...params.preferredTimezone, kind: "preferred" })
+    seenTimezoneIds.add(params.preferredTimezone.id)
+  }
+  for (const timezone of params.sidebarClockTimezones) {
+    if (seenTimezoneIds.has(timezone.id)) {
+      continue
+    }
+    clockTimezones.push({ ...timezone, kind: "selected" })
+    seenTimezoneIds.add(timezone.id)
+  }
+  return clockTimezones.slice(0, 3)
+}
+
+function readDcxAdminSidebarClockTimeParts(ianaName: string, now: Date): {
+  hour: number
+  minute: number
+  second: number
+} {
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: ianaName,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const parts = formatter.formatToParts(now)
+  return {
+    hour: Number(parts.find((part) => part.type === "hour")?.value ?? "0"),
+    minute: Number(parts.find((part) => part.type === "minute")?.value ?? "0"),
+    second: Number(parts.find((part) => part.type === "second")?.value ?? "0"),
+  }
+}
+
+function readDcxAdminSidebarClockHandCoordinates(angleDegrees: number, length: number): {
+  x: number
+  y: number
+} {
+  const angleRadians = (angleDegrees * Math.PI) / 180
+  return {
+    x: 50 + Math.sin(angleRadians) * length,
+    y: 50 - Math.cos(angleRadians) * length,
+  }
+}
+
+function readDcxAdminSidebarClockLabel(timezone: DcxAdminAuthenticatedUserClockTimezone): string {
+  const withoutUtcPrefix = timezone.display_label.replace(/^\(UTC[^)]*\)\s*/, "").trim()
+  if (withoutUtcPrefix) {
+    return withoutUtcPrefix
+  }
+  return timezone.iana_name.split("/").at(-1)?.replace(/_/g, " ") ?? timezone.iana_name
 }
