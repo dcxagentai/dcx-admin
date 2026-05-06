@@ -71,7 +71,7 @@ type Props = {
   onReturnToCatalog: () => void
 }
 
-type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs"
+type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs" | "shareholders"
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
 
@@ -104,6 +104,10 @@ function readNewsletterSendAudienceScopeLabel(
 
   if (audienceScope === "devs") {
     return "Devs only"
+  }
+
+  if (audienceScope === "shareholders") {
+    return "Shareholders"
   }
 
   return "All eligible users"
@@ -1269,6 +1273,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                       <SelectItem value="all">All eligible users</SelectItem>
                       <SelectItem value="admins">Admins only</SelectItem>
                       <SelectItem value="devs">Devs only</SelectItem>
+                      <SelectItem value="shareholders">Shareholders</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

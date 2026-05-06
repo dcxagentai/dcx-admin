@@ -10,7 +10,7 @@ export type DcxAdminNewsletterSendCatalogRow = {
   email_key: string
   send_status: string
   send_audience_type: string
-  send_audience_scope: "all" | "admins" | "devs"
+  send_audience_scope: "all" | "admins" | "devs" | "shareholders"
   scheduled_send_at_ts_ms: number
   send_started_at_ts_ms: number | null
   send_completed_at_ts_ms: number | null

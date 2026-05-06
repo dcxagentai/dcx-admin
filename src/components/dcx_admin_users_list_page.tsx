@@ -309,7 +309,6 @@ const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
 
 function DcxAdminUsersDirectoryTableSection(props: {
   title: string
-  titleBadge?: string
   users: DcxAdminUserListRow[]
   emptyLabel: string
   tone?: "default" | "shareholder"
@@ -330,22 +329,17 @@ function DcxAdminUsersDirectoryTableSection(props: {
     <section
       className={[
         "overflow-hidden border bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
-        isShareholderTone ? "border-[#f08a24]/45 ring-1 ring-[#f08a24]/10" : "border-black/6",
+        isShareholderTone ? "border-[#FFD700]" : "border-black/6",
       ].join(" ")}
     >
       <div
         className={[
           "border-b px-6 py-5",
-          isShareholderTone ? "border-[#f08a24]/25 bg-[#fff8ef]" : "border-black/6",
+          isShareholderTone ? "border-[#FFD700] bg-[#FFF4B8]" : "border-black/6",
         ].join(" ")}
       >
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">{props.title}</h3>
-          {props.titleBadge ? (
-            <span className="rounded-full border border-[#f08a24]/30 bg-white px-2.5 py-1 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[#3a5b7f]">
-              {props.titleBadge}
-            </span>
-          ) : null}
         </div>
       </div>
 
@@ -524,7 +518,6 @@ export function DcxAdminUsersListPage(props: Props) {
           />
           <DcxAdminUsersDirectoryTableSection
             title="Shareholders"
-            titleBadge="Bosses group"
             users={groupedUsers.shareholder}
             emptyLabel="No shareholder users found yet."
             tone="shareholder"
