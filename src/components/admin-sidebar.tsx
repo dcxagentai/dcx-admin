@@ -317,6 +317,13 @@ function DcxAdminSidebarTradingClock(props: {
   const minuteAngle = (timeParts.minute + timeParts.second / 60) * 6
   const secondAngle = timeParts.second * 6
   const clockNumerals = Array.from({ length: 12 }, (_, numeralIndex) => numeralIndex + 1)
+  const isNightTime = readDcxAdminSidebarClockIsNightTime(timeParts.hour)
+  const faceFillClassName = isNightTime ? "fill-[#3a5b7f]" : "fill-white"
+  const numeralClassName = isNightTime ? "fill-white text-[8.5px] font-semibold" : "fill-slate-500 text-[8.5px] font-semibold"
+  const tickClassName = isNightTime ? "stroke-white/65" : "stroke-slate-300"
+  const hourHandClassName = isNightTime ? "stroke-white" : "stroke-[#314f70]"
+  const minuteHandClassName = isNightTime ? "stroke-white" : "stroke-[#3a5b7f]"
+  const centerPinClassName = isNightTime ? "fill-white" : "fill-slate-400"
 
   return (
     <div className="flex min-w-0 flex-col items-center gap-1">
@@ -326,8 +333,8 @@ function DcxAdminSidebarTradingClock(props: {
         aria-label={`${readDcxAdminSidebarClockLabel(props.timezone)} local time`}
         className="size-[4.35rem]"
       >
-        <circle cx="50" cy="50" r="48" className="fill-white stroke-slate-100" strokeWidth="1" />
-        <circle cx="50" cy="50" r="47" className="fill-transparent stroke-slate-200" strokeWidth="1.2" />
+        <circle cx="50" cy="50" r="48" className={`${faceFillClassName} stroke-slate-100`} strokeWidth="1" />
+        <circle cx="50" cy="50" r="47" className={isNightTime ? "fill-transparent stroke-white/20" : "fill-transparent stroke-slate-200"} strokeWidth="1.2" />
         {clockNumerals.map((numeral) => {
           const numeralCoordinates = readDcxAdminSidebarClockHandCoordinates(numeral * 30, 36)
           return (
@@ -337,7 +344,7 @@ function DcxAdminSidebarTradingClock(props: {
               y={numeralCoordinates.y}
               textAnchor="middle"
               dominantBaseline="middle"
-              className="fill-slate-500 text-[8.5px] font-semibold"
+              className={numeralClassName}
             >
               {numeral}
             </text>
@@ -357,22 +364,26 @@ function DcxAdminSidebarTradingClock(props: {
               y1={tickStart.y}
               x2={tickEnd.x}
               y2={tickEnd.y}
-              className="stroke-slate-300"
+              className={tickClassName}
               strokeWidth="1.2"
               strokeLinecap="round"
             />
           )
         })}
-        <line x1="50" y1="50" x2="50" y2="32" className="stroke-[#314f70]" strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourAngle} 50 50)`} />
-        <line x1="50" y1="50" x2="50" y2="17" className="stroke-[#3a5b7f]" strokeWidth="3" strokeLinecap="round" transform={`rotate(${minuteAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="32" className={hourHandClassName} strokeWidth="5" strokeLinecap="round" transform={`rotate(${hourAngle} 50 50)`} />
+        <line x1="50" y1="50" x2="50" y2="17" className={minuteHandClassName} strokeWidth="3" strokeLinecap="round" transform={`rotate(${minuteAngle} 50 50)`} />
         <line x1="50" y1="50" x2="50" y2="14" className="stroke-[#f08a24]" strokeWidth="1.5" strokeLinecap="round" transform={`rotate(${secondAngle} 50 50)`} />
-        <circle cx="50" cy="50" r="3.5" className="fill-slate-400" />
+        <circle cx="50" cy="50" r="3.5" className={centerPinClassName} />
       </svg>
       <span className="max-w-[4.35rem] truncate text-[0.66rem] font-semibold leading-none text-sidebar-foreground">
         {readDcxAdminSidebarClockLabel(props.timezone)}
       </span>
     </div>
   )
+}
+
+function readDcxAdminSidebarClockIsNightTime(hour: number): boolean {
+  return hour >= 22 || hour < 6
 }
 
 function readDcxAdminSidebarClockTimezones(params: {
