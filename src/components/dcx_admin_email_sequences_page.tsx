@@ -546,8 +546,10 @@ export function DcxAdminEmailSequencesPage(props: Props) {
                 <label className="space-y-2">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Launch time</span>
                   <Input
-                    type="time"
-                    step={60}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-2][0-9]:[0-5][0-9]"
+                    placeholder="16:30"
                     value={sequenceDraft.scheduled_launch_time}
                     onChange={(event) =>
                       setSequenceDraft((currentDraft) =>
