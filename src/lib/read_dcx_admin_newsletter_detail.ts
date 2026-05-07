@@ -23,6 +23,7 @@ export type DcxAdminNewsletterDetail = DcxAdminNewsletterCatalogRow & {
     missing_languages: DcxAdminNewsletterCatalogRow["language"][]
   }
   language_readiness: {
+    send_audience_scope: "all" | "admins" | "devs" | "shareholders"
     total_evaluated_recipient_count: number
     total_send_candidate_count: number
     total_blocked_missing_translation_count: number
@@ -59,9 +60,16 @@ export async function readDcxAdminNewsletterDetail(params: {
   apiBaseUrl: string
   emailKey: string
   languageCode: string
+  sendAudienceScope?: "all" | "admins" | "devs" | "shareholders"
 }): Promise<SuccessResponse> {
+  const url = new URL(
+    `/admin/content/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`,
+    params.apiBaseUrl,
+  )
+  url.searchParams.set("send_audience_scope", params.sendAudienceScope ?? "all")
+
   const response = await fetch(
-    new URL(`/admin/content/newsletters/${encodeURIComponent(params.languageCode)}/${encodeURIComponent(params.emailKey)}`, params.apiBaseUrl),
+    url,
     { method: "GET", credentials: "include" },
   )
   const payload = (await response.json()) as SuccessResponse | ErrorResponse

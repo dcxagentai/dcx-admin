@@ -738,13 +738,21 @@ export function DcxAdminNewslettersPage(props: Props) {
     queryKey: ["dcx_admin_newsletters_catalog"],
     queryFn: async () => readDcxAdminNewslettersCatalog({ apiBaseUrl: props.apiBaseUrl }),
   })
+  const [sendAudienceScope, setSendAudienceScope] =
+    useState<DcxAdminNewsletterSendAudienceScope>("all")
   const detailQuery = useQuery({
-    queryKey: ["dcx_admin_newsletter_detail", props.routeLanguageCode, props.routeEmailKey],
+    queryKey: [
+      "dcx_admin_newsletter_detail",
+      props.routeLanguageCode,
+      props.routeEmailKey,
+      sendAudienceScope,
+    ],
     queryFn: async () =>
       readDcxAdminNewsletterDetail({
         apiBaseUrl: props.apiBaseUrl,
         emailKey: props.routeEmailKey ?? "",
         languageCode: props.routeLanguageCode ?? "en",
+        sendAudienceScope,
       }),
     enabled: Boolean(props.routeEmailKey && props.routeLanguageCode),
   })
@@ -757,12 +765,14 @@ export function DcxAdminNewslettersPage(props: Props) {
       "dcx_admin_newsletter_detail_original",
       originalTranslationRow?.language.language_code,
       originalTranslationRow?.email_key,
+      sendAudienceScope,
     ],
     queryFn: async () =>
       readDcxAdminNewsletterDetail({
         apiBaseUrl: props.apiBaseUrl,
         emailKey: originalTranslationRow?.email_key ?? "",
         languageCode: originalTranslationRow?.language.language_code ?? "en",
+        sendAudienceScope,
       }),
     enabled: Boolean(currentDetailData && !currentDetailData.is_original && originalTranslationRow),
   })
@@ -895,10 +905,8 @@ export function DcxAdminNewslettersPage(props: Props) {
   const [autosaveCountdownSeconds, setAutosaveCountdownSeconds] = useState<number | null>(null)
   const [scheduledSendDate, setScheduledSendDate] = useState<Date | undefined>(undefined)
   const [scheduledSendTime, setScheduledSendTime] = useState("")
-  const [sendAudienceScope, setSendAudienceScope] =
-    useState<DcxAdminNewsletterSendAudienceScope>("all")
   const [sendStatusText, setSendStatusText] = useState(
-    "Prepare one send now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
+    "Send one newsletter now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
   )
   const [catalogFilterQuery, setCatalogFilterQuery] = useState("")
   const [catalogSorting, setCatalogSorting] = useState<SortingState>([
@@ -939,6 +947,13 @@ export function DcxAdminNewslettersPage(props: Props) {
     const defaultScheduledSendAtTsMs = Date.now() + 60 * 60 * 1000
     setScheduledSendDate(buildDcxAdminCalendarDateFromTimestamp(defaultScheduledSendAtTsMs, props.adminTimezoneIanaName))
     setScheduledSendTime(buildDcxAdminTimeInputValueFromTimestamp(defaultScheduledSendAtTsMs, props.adminTimezoneIanaName))
+  }, [detail?.email_id, props.adminTimezoneIanaName])
+
+  useEffect(() => {
+    if (!detail) {
+      return
+    }
+
     if ((detail.language_readiness.total_blocked_missing_translation_count ?? 0) > 0) {
       setSendStatusText(
         `This newsletter still needs translations before sending. ${detail.language_readiness.total_blocked_missing_translation_count} eligible recipients are currently blocked by missing language coverage.`,
@@ -947,9 +962,13 @@ export function DcxAdminNewslettersPage(props: Props) {
     }
 
     setSendStatusText(
-      "Prepare one send now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
+      "Send one newsletter now or schedule it for later. Once dispatch runs, this section will update with delivery outcomes and click activity.",
     )
-  }, [detail?.email_id, props.adminTimezoneIanaName])
+  }, [
+    detail?.email_id,
+    detail?.language_readiness.send_audience_scope,
+    detail?.language_readiness.total_blocked_missing_translation_count,
+  ])
 
   useEffect(() => {
     return () => {
@@ -1508,11 +1527,11 @@ export function DcxAdminNewslettersPage(props: Props) {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Language readiness</p>
                   <p className="text-sm leading-6 text-slate-600">
-                    Newsletters only prepare send candidates when a live translation exists in the user’s preferred language. Transactional fallback-to-English does not apply here.
+                    Newsletters only prepare send candidates in the selected audience when a live translation exists in the user’s preferred language. Transactional fallback-to-English does not apply here.
                   </p>
                 </div>
                 <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
-                  <p>{detail.language_readiness.total_evaluated_recipient_count} eligible recipients</p>
+                  <p>{detail.language_readiness.total_evaluated_recipient_count} eligible recipients in audience</p>
                   <p>{detail.language_readiness.total_send_candidate_count} ready to send</p>
                   <p>{detail.language_readiness.total_blocked_missing_translation_count} waiting translation</p>
                 </div>
@@ -1592,8 +1611,10 @@ export function DcxAdminNewslettersPage(props: Props) {
                   </PopoverContent>
                 </Popover>
                 <Input
-                  type="time"
-                  step={60}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-2][0-9]:[0-5][0-9]"
+                  placeholder="14:44"
                   value={scheduledSendTime}
                   onChange={(event) => setScheduledSendTime(event.target.value)}
                   className="h-11 rounded-none border-slate-200 bg-white px-4 text-sm text-slate-900"
@@ -1605,7 +1626,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                     disabled={!canPrepareSend}
                     className="h-11"
                   >
-                    {prepareSendMutation.isPending ? "Preparing..." : "Prepare send now"}
+                    {prepareSendMutation.isPending ? "Sending..." : "Send now"}
                   </Button>
                   <Button
                     type="button"
@@ -1614,7 +1635,7 @@ export function DcxAdminNewslettersPage(props: Props) {
                     variant="outline"
                     className="h-11"
                   >
-                    Prepare scheduled send
+                    Schedule
                   </Button>
                 </ButtonGroup>
               </div>
