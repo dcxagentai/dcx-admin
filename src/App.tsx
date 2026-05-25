@@ -702,8 +702,9 @@ function readDcxAdminScreenTitle(activeScreen: DcxAdminScreen): string {
 function App() {
   const queryClient = useQueryClient()
   const apiBaseUrl = readDcxAdminApiBaseUrl()
+  const configuredAppBaseUrl = import.meta.env.VITE_APP_BASE_URL?.trim()
   const appBaseUrl =
-    import.meta.env.VITE_APP_BASE_URL ??
+    configuredAppBaseUrl ||
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
       ? "http://localhost:5173"
       : "https://app.dcxagent.ai")
