@@ -644,6 +644,10 @@ function readDcxAdminApiBaseUrl(): string {
     return import.meta.env.VITE_API_BASE_URL
   }
 
+  if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    return "https://api.dcxagent.ai"
+  }
+
   if (window.location.hostname === "127.0.0.1") {
     return "http://127.0.0.1:8000"
   }
