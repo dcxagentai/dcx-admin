@@ -19,20 +19,33 @@ export type DcxAdminSupportedLanguageRow = {
 }
 
 const DCX_ADMIN_LANGUAGE_TO_REGION_CODE: Record<string, string> = {
+  ar: "AE",
   de: "DE",
   en: "GB",
   es: "ES",
   fr: "FR",
+  hi: "IN",
+  id: "ID",
+  pt: "BR",
+  ru: "RU",
+  tr: "TR",
+  ur: "PK",
+  vi: "VN",
+  zh: "CN",
 }
 
 const DCX_ADMIN_SUPPORTED_LANGUAGE_ROWS: DcxAdminSupportedLanguageRow[] = [
   {
-    language_code: "en",
-    language_name_native: "English",
+    language_code: "ar",
+    language_name_native: "العربية",
   },
   {
     language_code: "de",
     language_name_native: "Deutsch",
+  },
+  {
+    language_code: "en",
+    language_name_native: "English",
   },
   {
     language_code: "es",
@@ -41,6 +54,38 @@ const DCX_ADMIN_SUPPORTED_LANGUAGE_ROWS: DcxAdminSupportedLanguageRow[] = [
   {
     language_code: "fr",
     language_name_native: "Français",
+  },
+  {
+    language_code: "hi",
+    language_name_native: "हिन्दी",
+  },
+  {
+    language_code: "id",
+    language_name_native: "Bahasa Indonesia",
+  },
+  {
+    language_code: "pt",
+    language_name_native: "Português",
+  },
+  {
+    language_code: "ru",
+    language_name_native: "Русский",
+  },
+  {
+    language_code: "tr",
+    language_name_native: "Türkçe",
+  },
+  {
+    language_code: "ur",
+    language_name_native: "اردو",
+  },
+  {
+    language_code: "vi",
+    language_name_native: "Tiếng Việt",
+  },
+  {
+    language_code: "zh",
+    language_name_native: "中文",
   },
 ]
 
