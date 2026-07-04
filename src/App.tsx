@@ -16,7 +16,7 @@ import { DcxAdminNewslettersPage } from "./components/dcx_admin_newsletters_page
 import { DcxAdminPublicSitePublishPage } from "./components/dcx_admin_public_site_publish_page"
 import { DcxAdminSchedulePage } from "./components/dcx_admin_schedule_page"
 import { DcxAdminShell } from "./components/dcx_admin_shell"
-import { DcxAdminTrackerPage } from "./components/dcx_admin_tracker_page"
+import { DcxAdminTrackerPage, type DcxAdminTrackerView } from "./components/dcx_admin_tracker_page"
 import { DcxAdminUsersListPage } from "./components/dcx_admin_users_list_page"
 import { DcxAdminUxStringsCatalogPage } from "./components/dcx_admin_ux_strings_catalog_page"
 import { loginDcxUserWithEmailAndPassword } from "./lib/login_dcx_user_with_email_and_password"
@@ -67,8 +67,37 @@ type DcxAdminRouteState = {
   routePageKey: string | null
   routeEmailKey?: string | null
   routeNewsletterKey: string | null
+  routeTrackerView?: DcxAdminTrackerView
   routeUxStringGroup?: string | null
   routeUxStringKey?: string | null
+}
+
+function readDcxAdminTrackerViewFromPathname(pathname: string): DcxAdminTrackerView | null {
+  if (pathname === "/tracker") {
+    return "all"
+  }
+
+  const trackerSegment = pathname.replace("/tracker/", "").split("/").filter(Boolean)[0] ?? ""
+  if (trackerSegment === "long-term") {
+    return "long_term"
+  }
+  if (trackerSegment === "strategies") {
+    return "strategy"
+  }
+  if (trackerSegment === "operations") {
+    return "operation"
+  }
+  if (trackerSegment === "challenges" || trackerSegment === "battles") {
+    return "battle"
+  }
+  if (trackerSegment === "tasks") {
+    return "task"
+  }
+  if (trackerSegment === "updates") {
+    return "updates"
+  }
+
+  return null
 }
 
 function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteState {
@@ -85,7 +114,8 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
     }
   }
 
-  if (pathname === "/tracker") {
+  const trackerView = readDcxAdminTrackerViewFromPathname(pathname)
+  if (trackerView !== null) {
     return {
       activeScreen: "tracker",
       pathname,
@@ -95,6 +125,7 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
       routePageKey: null,
       routeEmailKey: null,
       routeNewsletterKey: null,
+      routeTrackerView: trackerView,
     }
   }
 
@@ -977,6 +1008,7 @@ function App() {
       {activeScreen === "tracker" ? (
         <DcxAdminTrackerPage
           apiBaseUrl={apiBaseUrl}
+          routeView={routeState.routeTrackerView ?? "all"}
         />
       ) : null}
 

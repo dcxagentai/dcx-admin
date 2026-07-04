@@ -34,10 +34,12 @@ export async function saveDcxAdminTrackerWorkItem(params: {
   description: string
   currentState: string
   level: DcxAdminTrackerLevel
-  pillar: DcxAdminTrackerPillar
+  pillars: DcxAdminTrackerPillar[]
   status: DcxAdminTrackerStatus
   parentWorkItemId: number | null
 }): Promise<SuccessResponse> {
+  const primaryPillar = params.pillars[0] ?? "building"
+
   const response = await fetch(new URL("/admin/tracker/work-items/save", params.apiBaseUrl), {
     method: "POST",
     credentials: "include",
@@ -48,7 +50,8 @@ export async function saveDcxAdminTrackerWorkItem(params: {
       description: params.description,
       current_state: params.currentState,
       level: params.level,
-      pillar: params.pillar,
+      pillar: primaryPillar,
+      pillars: params.pillars,
       status: params.status,
       parent_work_item_id: params.parentWorkItemId,
     }),

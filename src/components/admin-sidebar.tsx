@@ -45,6 +45,51 @@ type Props = React.ComponentProps<typeof Sidebar> & {
 function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
   return [
     {
+      id: "tracker",
+      title: "Tracker",
+      url: "/tracker",
+      icon: <ListTodoIcon />,
+      isActive: currentPathname === "/tracker" || currentPathname.startsWith("/tracker/"),
+      items: [
+        {
+          id: "tracker_long_term",
+          title: "Long-term",
+          url: "/tracker/long-term",
+          isActive: currentPathname === "/tracker/long-term",
+        },
+        {
+          id: "tracker_strategies",
+          title: "Strategies",
+          url: "/tracker/strategies",
+          isActive: currentPathname === "/tracker/strategies",
+        },
+        {
+          id: "tracker_operations",
+          title: "Operations",
+          url: "/tracker/operations",
+          isActive: currentPathname === "/tracker/operations",
+        },
+        {
+          id: "tracker_challenges",
+          title: "Challenges",
+          url: "/tracker/challenges",
+          isActive: currentPathname === "/tracker/challenges" || currentPathname === "/tracker/battles",
+        },
+        {
+          id: "tracker_tasks",
+          title: "Tasks",
+          url: "/tracker/tasks",
+          isActive: currentPathname === "/tracker/tasks",
+        },
+        {
+          id: "tracker_updates",
+          title: "Updates",
+          url: "/tracker/updates",
+          isActive: currentPathname === "/tracker/updates",
+        },
+      ],
+    },
+    {
       id: "users",
       title: "Users",
       url: "/users",
@@ -57,13 +102,6 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
       url: "/schedule",
       icon: <CalendarDaysIcon />,
       isActive: currentPathname.startsWith("/schedule"),
-    },
-    {
-      id: "tracker",
-      title: "Tracker",
-      url: "/tracker",
-      icon: <ListTodoIcon />,
-      isActive: currentPathname === "/tracker" || currentPathname.startsWith("/tracker/"),
     },
     {
       id: "content",

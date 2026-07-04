@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronRightIcon } from "lucide-react"
 
-const DCX_ADMIN_NAV_MAIN_OPEN_STATE_STORAGE_KEY = "dcx_admin_nav_main_open_state_v2"
+const DCX_ADMIN_NAV_MAIN_OPEN_STATE_STORAGE_KEY = "dcx_admin_nav_main_open_state_v3"
 
 export type AdminNavMainItem = {
   id: string

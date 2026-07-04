@@ -16,6 +16,7 @@ export type DcxAdminTrackerWorkItem = {
   current_state: string
   level: DcxAdminTrackerLevel
   pillar: DcxAdminTrackerPillar
+  pillars: DcxAdminTrackerPillar[]
   status: DcxAdminTrackerStatus
   parent_work_item_id: number | null
   parent_title: string | null
