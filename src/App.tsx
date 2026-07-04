@@ -16,6 +16,7 @@ import { DcxAdminNewslettersPage } from "./components/dcx_admin_newsletters_page
 import { DcxAdminPublicSitePublishPage } from "./components/dcx_admin_public_site_publish_page"
 import { DcxAdminSchedulePage } from "./components/dcx_admin_schedule_page"
 import { DcxAdminShell } from "./components/dcx_admin_shell"
+import { DcxAdminTrackerPage } from "./components/dcx_admin_tracker_page"
 import { DcxAdminUsersListPage } from "./components/dcx_admin_users_list_page"
 import { DcxAdminUxStringsCatalogPage } from "./components/dcx_admin_ux_strings_catalog_page"
 import { loginDcxUserWithEmailAndPassword } from "./lib/login_dcx_user_with_email_and_password"
@@ -45,6 +46,7 @@ function redirectToLoginScreen(): void {
 type DcxAdminScreen =
   | "users"
   | "schedule"
+  | "tracker"
   | "content_page_categories"
   | "ux_strings"
   | "emails"
@@ -73,6 +75,19 @@ function readDcxAdminRouteStateFromPathname(pathname: string): DcxAdminRouteStat
   if (pathname === "/schedule") {
     return {
       activeScreen: "schedule",
+      pathname,
+      initialEmailType: null,
+      routeLanguageCode: null,
+      routeCategoryKey: null,
+      routePageKey: null,
+      routeEmailKey: null,
+      routeNewsletterKey: null,
+    }
+  }
+
+  if (pathname === "/tracker") {
+    return {
+      activeScreen: "tracker",
       pathname,
       initialEmailType: null,
       routeLanguageCode: null,
@@ -664,6 +679,10 @@ function readDcxAdminScreenTitle(activeScreen: DcxAdminScreen): string {
     return "Schedule"
   }
 
+  if (activeScreen === "tracker") {
+    return "Tracker"
+  }
+
   if (activeScreen === "content_pages") {
     return "Pages"
   }
@@ -756,6 +775,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletter_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
       redirectToLoginScreen()
     },
   })
@@ -797,6 +817,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletter_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
       redirectToLoginScreen()
     }
 
@@ -863,6 +884,7 @@ function App() {
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_newsletter_detail"] })
       queryClient.removeQueries({ queryKey: ["dcx_admin_public_site_publish_status"] })
+      queryClient.removeQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
       redirectToLoginScreen()
     }
   }, [
@@ -909,8 +931,8 @@ function App() {
               This session can enter the app, but not the admin domain.
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
-              The current user role is `{authenticatedSessionSummary.user_role}`. Only `admin` and
-              `dev` roles should access the internal admin workspace.
+              The current user role is `{authenticatedSessionSummary.user_role}`. Admin, dev,
+              shareholder, and investor roles can access the internal admin workspace.
             </p>
             <div className="flex flex-wrap gap-3 pt-3">
               <button
@@ -949,6 +971,12 @@ function App() {
         <DcxAdminSchedulePage
           apiBaseUrl={apiBaseUrl}
           adminTimezoneIanaName={adminTimezoneIanaName}
+        />
+      ) : null}
+
+      {activeScreen === "tracker" ? (
+        <DcxAdminTrackerPage
+          apiBaseUrl={apiBaseUrl}
         />
       ) : null}
 

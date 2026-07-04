@@ -8,6 +8,7 @@ import {
   FilesIcon,
   LanguagesIcon,
   LayoutDashboardIcon,
+  ListTodoIcon,
   SendIcon,
   SquareUserRoundIcon,
 } from "lucide-react"
@@ -56,6 +57,13 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
       url: "/schedule",
       icon: <CalendarDaysIcon />,
       isActive: currentPathname.startsWith("/schedule"),
+    },
+    {
+      id: "tracker",
+      title: "Tracker",
+      url: "/tracker",
+      icon: <ListTodoIcon />,
+      isActive: currentPathname === "/tracker" || currentPathname.startsWith("/tracker/"),
     },
     {
       id: "content",
