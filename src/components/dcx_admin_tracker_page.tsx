@@ -525,15 +525,6 @@ function DcxAdminTrackerRelationList(props: {
   )
 }
 
-function TrackerStat(props: { label: string; value: string }) {
-  return (
-    <div className="border border-black/6 bg-white px-5 py-4 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{props.label}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-slate-950">{props.value}</p>
-    </div>
-  )
-}
-
 function TrackerSelect<TValue extends string>(props: {
   label: string
   value: TValue
@@ -740,9 +731,6 @@ export function DcxAdminTrackerPage(props: Props) {
       ),
     [workItems, homeVisibleIds],
   )
-  const blockedItems = workItems.filter((workItem) => workItem.status === "waiting")
-  const activeItems = workItems.filter((workItem) => workItem.status === "active")
-  const operationItems = workItems.filter((workItem) => workItem.level === "operation")
   const trackerViewTitle = readTrackerViewTitle(props.routeView)
   const visibleWorkItemCount =
     props.routeView === "all" ? homeVisibleIds.size : props.routeView === "updates" ? updates.length : filteredLevelWorkItems.length
@@ -822,11 +810,7 @@ export function DcxAdminTrackerPage(props: Props) {
       <section className="border border-black/6 bg-white px-6 py-5 shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Tracker</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{trackerViewTitle}</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Nested long-term direction, strategies, operations, challenges, and tasks with one activity log attached to each item.
-            </p>
+            <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{trackerViewTitle}</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -869,14 +853,33 @@ export function DcxAdminTrackerPage(props: Props) {
             <div className="border-b border-black/6 px-6 py-4">
               <h3 className="text-lg font-semibold tracking-tight text-slate-950">Activity update</h3>
             </div>
-            <div className="grid gap-3 px-6 py-5 lg:grid-cols-[minmax(13rem,0.8fr)_10rem_minmax(16rem,1.4fr)_auto] lg:items-end">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">Item</label>
+            <div className="space-y-3 px-6 py-5">
+              <Textarea
+                id="dcx-admin-tracker-global-update"
+                value={updateBody}
+                onChange={(event) => setUpdateBody(event.target.value)}
+                placeholder="What changed, what is blocked, what was decided, or what happens next."
+                className="min-h-24 rounded-md"
+                aria-label="Activity update"
+              />
+              <div className="grid gap-3 md:grid-cols-[11rem_minmax(16rem,1fr)_auto] md:items-center">
+                <Select value={updateKind} onValueChange={(value) => setUpdateKind(value as DcxAdminTrackerUpdateKind)}>
+                  <SelectTrigger className="h-10 w-full rounded-md" aria-label="Update type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {trackerUpdateKindOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select
                   value={updateWorkItemId === null ? "none" : String(updateWorkItemId)}
                   onValueChange={(value) => setUpdateWorkItemId(value === "none" ? null : Number(value))}
                 >
-                  <SelectTrigger className="h-10 w-full rounded-md">
+                  <SelectTrigger className="h-10 w-full rounded-md" aria-label="Update item">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -889,34 +892,16 @@ export function DcxAdminTrackerPage(props: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  type="button"
+                  className="rounded-md"
+                  disabled={createUpdateMutation.isPending || updateWorkItemId === null || updateBody.trim() === ""}
+                  onClick={() => createUpdateMutation.mutate()}
+                >
+                  <MessageSquarePlusIcon className="size-4" />
+                  {createUpdateMutation.isPending ? "Adding..." : "Add update"}
+                </Button>
               </div>
-              <TrackerSelect
-                label="Type"
-                value={updateKind}
-                options={trackerUpdateKindOptions}
-                onValueChange={(value) => setUpdateKind(value as DcxAdminTrackerUpdateKind)}
-              />
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="dcx-admin-tracker-global-update">
-                  Update
-                </label>
-                <Textarea
-                  id="dcx-admin-tracker-global-update"
-                  value={updateBody}
-                  onChange={(event) => setUpdateBody(event.target.value)}
-                  placeholder="What changed, what is blocked, what was decided, or what happens next."
-                  className="min-h-20 rounded-md"
-                />
-              </div>
-              <Button
-                type="button"
-                className="rounded-md lg:mb-0.5"
-                disabled={createUpdateMutation.isPending || updateWorkItemId === null || updateBody.trim() === ""}
-                onClick={() => createUpdateMutation.mutate()}
-              >
-                <MessageSquarePlusIcon className="size-4" />
-                {createUpdateMutation.isPending ? "Adding..." : "Add update"}
-              </Button>
             </div>
             {createUpdateMutation.isError ? (
               <p className="px-6 pb-5 text-sm text-red-700">
@@ -928,12 +913,6 @@ export function DcxAdminTrackerPage(props: Props) {
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]">
             <div className="flex min-w-0 flex-col gap-6">
-              <section className="grid gap-3 sm:grid-cols-3">
-                <TrackerStat label="Operations" value={String(operationItems.length)} />
-                <TrackerStat label="In progress" value={String(activeItems.length)} />
-                <TrackerStat label="Waiting" value={String(blockedItems.length)} />
-              </section>
-
               {props.routeView !== "updates" ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
                   <div className="space-y-4 border-b border-black/6 px-6 py-5">
