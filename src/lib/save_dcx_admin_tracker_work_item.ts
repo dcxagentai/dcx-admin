@@ -38,6 +38,7 @@ export async function saveDcxAdminTrackerWorkItem(params: {
   status: DcxAdminTrackerStatus
   parentWorkItemId: number | null
   assignedToUserId: number | null
+  originUpdateId: number | null
 }): Promise<SuccessResponse> {
   const primaryPillar = params.pillars[0] ?? "building"
 
@@ -56,6 +57,7 @@ export async function saveDcxAdminTrackerWorkItem(params: {
       status: params.status,
       parent_work_item_id: params.parentWorkItemId,
       assigned_to_user_id: params.assignedToUserId,
+      origin_update_id: params.originUpdateId,
     }),
   })
 

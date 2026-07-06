@@ -9,5 +9,7 @@ Added the second tracker polish pass on 2026-07-06:
 - The old standalone tracker title/action block was removed; refresh and new-item actions now live with the work/update lists.
 - The update type selector was kept on the standard `SelectValue` path with colored trigger/items, after the direct badge-in-trigger version behaved poorly in the browser.
 - Index screens no longer show a default right-hand recent activity panel; the right side appears only for selected/editing content.
+- Work items can now be created from an activity update. The edit-update panel shows "Items from this update" and a compact "Create item" action.
+- The edit-update save button was moved to its own row so it cannot overflow in the right panel.
 
 Backend support depends on the matching SQL migration in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql`.

@@ -20,6 +20,7 @@ export type DcxAdminTrackerWorkItem = {
   status: DcxAdminTrackerStatus
   parent_work_item_id: number | null
   parent_title: string | null
+  origin_update_id: number | null
   assigned_to_user_id: number | null
   assigned_to_email: string | null
   created_by_user_id: number | null
