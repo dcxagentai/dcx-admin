@@ -11,5 +11,8 @@ Added the second tracker polish pass on 2026-07-06:
 - Index screens no longer show a default right-hand recent activity panel; the right side appears only for selected/editing content.
 - Work items can now be created from an activity update. The edit-update panel shows "Items from this update" and a compact "Create item" action.
 - The edit-update save button was moved to its own row so it cannot overflow in the right panel.
+- Work item detail panels now show a clickable origin update when `origin_update_id` is present.
+- Added a `Who` tracker view grouping assignable people with their assigned items and authored updates.
+- Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 
 Backend support depends on the matching SQL migration in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql`.

@@ -87,6 +87,18 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
           url: "/tracker/updates",
           isActive: currentPathname === "/tracker/updates",
         },
+        {
+          id: "tracker_who",
+          title: "Who",
+          url: "/tracker/who",
+          isActive: currentPathname === "/tracker/who",
+        },
+        {
+          id: "tracker_archived",
+          title: "Archived",
+          url: "/tracker/archived",
+          isActive: currentPathname === "/tracker/archived",
+        },
       ],
     },
     {

@@ -23,6 +23,10 @@ export type DcxAdminTrackerWorkItem = {
   origin_update_id: number | null
   assigned_to_user_id: number | null
   assigned_to_email: string | null
+  is_archived: boolean
+  archived_by_user_id: number | null
+  archived_by_email: string | null
+  archived_at_ts_ms: number | null
   created_by_user_id: number | null
   created_by_email: string | null
   updated_by_user_id: number | null
