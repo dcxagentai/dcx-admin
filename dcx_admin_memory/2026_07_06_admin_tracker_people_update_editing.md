@@ -7,5 +7,7 @@ Added the second tracker polish pass on 2026-07-06:
 - The update type selector now renders colored labels for notes, progress, blockers, decisions, questions, and actions.
 - The global update composer was simplified: no visible header/field labels, a full-width update text area first, then type, item, and add button.
 - The old standalone tracker title/action block was removed; refresh and new-item actions now live with the work/update lists.
+- The update type selector was kept on the standard `SelectValue` path with colored trigger/items, after the direct badge-in-trigger version behaved poorly in the browser.
+- Index screens no longer show a default right-hand recent activity panel; the right side appears only for selected/editing content.
 
 Backend support depends on the matching SQL migration in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql`.

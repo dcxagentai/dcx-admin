@@ -436,13 +436,21 @@ function DcxAdminTrackerUpdateKindSelect(props: {
 }) {
   return (
     <Select value={props.value} onValueChange={(value) => props.onValueChange(value as DcxAdminTrackerUpdateKind)}>
-      <SelectTrigger className="h-10 w-full rounded-md" aria-label={props.ariaLabel}>
-        <DcxAdminTrackerUpdateKindBadge updateKind={props.value} />
+      <SelectTrigger
+        className={cn("h-10 w-full rounded-md", readTrackerUpdateKindClassName(props.value))}
+        aria-label={props.ariaLabel}
+      >
+        <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {trackerUpdateKindOptions.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <DcxAdminTrackerUpdateKindBadge updateKind={option.value} />
+          <SelectItem
+            key={option.value}
+            value={option.value}
+            className={cn("my-1 border", readTrackerUpdateKindClassName(option.value))}
+            textValue={option.label}
+          >
+            {option.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -889,6 +897,7 @@ export function DcxAdminTrackerPage(props: Props) {
       : props.routeView === "updates"
         ? updates.length
         : workItems.filter((workItem) => workItem.level === props.routeView).length
+  const hasTrackerSidePanel = editingUpdateDraft !== null || isCreating || selectedWorkItem !== null
 
   useEffect(() => {
     if (!selectedWorkItem || isCreating) {
@@ -898,11 +907,10 @@ export function DcxAdminTrackerPage(props: Props) {
   }, [selectedWorkItem, isCreating])
 
   useEffect(() => {
-    if (props.routeView === "updates") {
-      setSelectedWorkItemId(null)
-      setIsCreating(false)
-      setSelectedPanelMode("read")
-    }
+    setSelectedWorkItemId(null)
+    setIsCreating(false)
+    setSelectedPanelMode("read")
+    setEditingUpdateDraft(null)
   }, [props.routeView])
 
   function selectWorkItem(workItem: DcxAdminTrackerWorkItem): void {
@@ -1036,7 +1044,12 @@ export function DcxAdminTrackerPage(props: Props) {
             ) : null}
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]">
+          <div
+            className={cn(
+              "grid gap-6",
+              hasTrackerSidePanel ? "xl:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]" : "grid-cols-1",
+            )}
+          >
             <div className="flex min-w-0 flex-col gap-6">
               {props.routeView !== "updates" ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -1178,6 +1191,7 @@ export function DcxAdminTrackerPage(props: Props) {
               )}
             </div>
 
+            {hasTrackerSidePanel ? (
             <div className="flex min-w-0 flex-col gap-6">
               {editingUpdateDraft ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -1478,29 +1492,9 @@ export function DcxAdminTrackerPage(props: Props) {
                     </section>
                   </div>
                 </section>
-              ) : (
-                <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
-                  <div className="border-b border-black/6 px-6 py-5">
-                    <h3 className="text-lg font-semibold tracking-tight text-slate-950">Recent activity</h3>
-                  </div>
-                  <div>
-                    {updates.length > 0 ? (
-                      updates.slice(0, 8).map((update) => (
-                        <DcxAdminTrackerUpdateRow
-                          key={update.update_id}
-                          update={update}
-                          showWorkItemTitle
-                          onOpenWorkItem={openWorkItemById}
-                          onEditUpdate={startEditingUpdate}
-                        />
-                      ))
-                    ) : (
-                      <p className="px-6 py-6 text-sm text-slate-500">No tracker activity has been recorded yet.</p>
-                    )}
-                  </div>
-                </section>
-              )}
+              ) : null}
             </div>
+            ) : null}
           </div>
         </>
       ) : null}
