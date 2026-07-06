@@ -20,6 +20,8 @@ export type DcxAdminTrackerWorkItem = {
   status: DcxAdminTrackerStatus
   parent_work_item_id: number | null
   parent_title: string | null
+  assigned_to_user_id: number | null
+  assigned_to_email: string | null
   created_by_user_id: number | null
   created_by_email: string | null
   updated_by_user_id: number | null
@@ -40,6 +42,15 @@ export type DcxAdminTrackerUpdate = {
   update_body: string
   created_at_ts_ms: number
   updated_at_ts_ms: number
+  updated_by_user_id: number | null
+  updated_by_email: string | null
+}
+
+export type DcxAdminTrackerAssignableUser = {
+  user_id: number
+  primary_email: string
+  user_role: string
+  account_status: string
 }
 
 type SuccessResponse = {
@@ -47,6 +58,7 @@ type SuccessResponse = {
   data: {
     work_items: DcxAdminTrackerWorkItem[]
     updates: DcxAdminTrackerUpdate[]
+    assignable_users: DcxAdminTrackerAssignableUser[]
     total_work_item_count: number
     returned_update_count: number
   }
