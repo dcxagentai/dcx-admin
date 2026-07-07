@@ -3,7 +3,7 @@
  * Internal DCX tracker surface.
  * It keeps the model small: nested work items plus activity updates.
  */
-import { useEffect, useMemo, useState } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArchiveIcon,
@@ -692,6 +692,7 @@ function DcxAdminTrackerLevelCombobox(props: {
 function DcxAdminTrackerUpdateRow(props: {
   update: DcxAdminTrackerUpdate
   showWorkItemTitle?: boolean
+  isSelected?: boolean
   onOpenWorkItem?: (workItemId: number) => void
   onEditUpdate: (update: DcxAdminTrackerUpdate) => void
 }) {
@@ -700,7 +701,12 @@ function DcxAdminTrackerUpdateRow(props: {
     props.update.updated_at_ts_ms !== props.update.created_at_ts_ms
 
   return (
-    <div className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+    <div
+      className={cn(
+        "border-b border-slate-100 px-4 py-3 last:border-b-0",
+        props.isSelected ? "border border-slate-300 bg-slate-50" : "",
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-slate-500">
@@ -806,6 +812,7 @@ function DcxAdminTrackerMapBranch(props: {
   selectedWorkItemId: number | null
   onSelectWorkItem: (workItem: DcxAdminTrackerWorkItem) => void
   onCreateChild: (workItem: DcxAdminTrackerWorkItem) => void
+  renderInlinePanel: (workItem: DcxAdminTrackerWorkItem) => ReactNode
 }) {
   const children = (props.childrenByParent.get(props.workItem.work_item_id) ?? []).filter(
     (child) => child.level !== "task" && props.visibleIds.has(child.work_item_id),
@@ -820,6 +827,7 @@ function DcxAdminTrackerMapBranch(props: {
         onSelectWorkItem={props.onSelectWorkItem}
         onCreateChild={props.onCreateChild}
       />
+      {props.renderInlinePanel(props.workItem)}
       {children.length > 0 ? (
         <div className="ml-4 space-y-2 border-l border-slate-200 pl-4">
           {children.map((child) => (
@@ -831,6 +839,7 @@ function DcxAdminTrackerMapBranch(props: {
               selectedWorkItemId={props.selectedWorkItemId}
               onSelectWorkItem={props.onSelectWorkItem}
               onCreateChild={props.onCreateChild}
+              renderInlinePanel={props.renderInlinePanel}
             />
           ))}
         </div>
@@ -1190,15 +1199,8 @@ export function DcxAdminTrackerPage(props: Props) {
       }),
     [assignableUsers, activeWorkItems, activeChildrenByParent, activeTreeOrderById, visibleUpdates],
   )
-  const teamVisibleWorkItemIds = useMemo(
-    () =>
-      new Set(
-        trackerPersonGroups.flatMap((personGroup) =>
-          personGroup.workItemRows.map((workItemRow) => workItemRow.workItem.work_item_id),
-        ),
-      ),
-    [trackerPersonGroups],
-  )
+  const shouldRenderTrackerSidePanel: boolean = false
+  const hasTrackerSidePanel = editingUpdateDraft !== null || isCreating || selectedWorkItem !== null
   const trackerViewTitle = readTrackerViewTitle(props.routeView)
   const visibleWorkItemCount =
     props.routeView === "all"
@@ -1218,12 +1220,6 @@ export function DcxAdminTrackerPage(props: Props) {
           : props.routeView === "archived"
             ? archivedWorkItems.length
             : activeWorkItems.filter((workItem) => workItem.level === props.routeView).length
-  const isTeamInlineWorkItemPanel =
-    props.routeView === "team" &&
-    selectedWorkItem !== null &&
-    !isCreating &&
-    teamVisibleWorkItemIds.has(selectedWorkItem.work_item_id)
-  const hasTrackerSidePanel = editingUpdateDraft !== null || isCreating || (selectedWorkItem !== null && !isTeamInlineWorkItemPanel)
 
   useEffect(() => {
     if (!selectedWorkItem || isCreating) {
@@ -1244,14 +1240,13 @@ export function DcxAdminTrackerPage(props: Props) {
     setUpdateWorkItemId(workItem.work_item_id)
     setIsCreating(false)
     setSelectedPanelMode("read")
+    setEditingUpdateDraft(null)
   }
 
-  function toggleTeamWorkItem(workItem: DcxAdminTrackerWorkItem): void {
+  function toggleWorkItem(workItem: DcxAdminTrackerWorkItem): void {
     const isSameOpenWorkItem =
       selectedWorkItemId === workItem.work_item_id &&
-      !isCreating &&
-      editingUpdateDraft === null &&
-      teamVisibleWorkItemIds.has(workItem.work_item_id)
+      (selectedPanelMode === "read" || selectedPanelMode === "edit")
 
     if (isSameOpenWorkItem) {
       hideSelectedWorkItemPanel()
@@ -1341,6 +1336,7 @@ export function DcxAdminTrackerPage(props: Props) {
     setSelectedWorkItemId(null)
     setSelectedPanelMode("read")
     setIsCreating(false)
+    setEditingUpdateDraft(null)
     setDraft(buildBlankTrackerDraft())
   }
 
@@ -1654,9 +1650,7 @@ export function DcxAdminTrackerPage(props: Props) {
             </div>
             <div>
               {selectedUpdates.length > 0 ? (
-                selectedUpdates.map((update) => (
-                  <DcxAdminTrackerUpdateRow key={update.update_id} update={update} onEditUpdate={startEditingUpdate} />
-                ))
+                selectedUpdates.map((update) => renderUpdateRowWithInlinePanel(update))
               ) : (
                 <p className="px-4 py-6 text-sm text-slate-500">No updates recorded for this item yet.</p>
               )}
@@ -1664,6 +1658,189 @@ export function DcxAdminTrackerPage(props: Props) {
           </section>
         </div>
       </section>
+    )
+  }
+
+  function renderWorkItemInlinePanel(workItem: DcxAdminTrackerWorkItem, options: { indentRem?: number } = {}) {
+    if (selectedWorkItemId !== workItem.work_item_id) {
+      return null
+    }
+
+    return (
+      <div
+        className="min-w-0"
+        style={options.indentRem === undefined ? undefined : { marginLeft: `${options.indentRem}rem` }}
+      >
+        {isCreating || selectedPanelMode === "edit"
+          ? renderWorkItemEditorPanel({ inline: true })
+          : renderSelectedWorkItemDetailPanel({ inline: true })}
+      </div>
+    )
+  }
+
+  function renderUpdateEditorPanel(options: { inline?: boolean } = {}) {
+    if (editingUpdateDraft === null) {
+      return null
+    }
+
+    const isCreatingLevelFromThisUpdate = isCreating && draft.originUpdateId === editingUpdateDraft.updateId
+
+    return (
+      <section
+        className={cn(
+          "border border-black/6",
+          options.inline
+            ? "border-l-2 border-l-slate-300 bg-slate-50/70 shadow-none"
+            : "bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
+        )}
+      >
+        <div className="flex flex-col gap-3 border-b border-black/6 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-base font-semibold tracking-tight text-slate-950">Edit update</h3>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-md"
+            onClick={() => {
+              saveUpdateMutation.reset()
+              setEditingUpdateDraft(null)
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+        <div className="space-y-3 px-5 py-4">
+          <Textarea
+            value={editingUpdateDraft.updateBody}
+            onChange={(event) =>
+              setEditingUpdateDraft((currentDraft) =>
+                currentDraft ? { ...currentDraft, updateBody: event.target.value } : currentDraft,
+              )
+            }
+            placeholder="Update: what changed, what is blocked, what was decided, or what happens next."
+            className="min-h-24 rounded-md"
+            aria-label="Edited activity update"
+          />
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+            <DcxAdminTrackerUpdateKindSelect
+              value={editingUpdateDraft.updateKind}
+              onValueChange={(updateKind) =>
+                setEditingUpdateDraft((currentDraft) =>
+                  currentDraft ? { ...currentDraft, updateKind } : currentDraft,
+                )
+              }
+              ariaLabel="Edited update type"
+            />
+            <Select
+              value={String(editingUpdateDraft.workItemId)}
+              onValueChange={(value) =>
+                setEditingUpdateDraft((currentDraft) =>
+                  currentDraft ? { ...currentDraft, workItemId: Number(value) } : currentDraft,
+                )
+              }
+            >
+              <SelectTrigger className="h-10 w-full rounded-md" aria-label="Edited update level">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {parentOptionRows.map(({ workItem, depth }) => (
+                  <SelectItem key={workItem.work_item_id} value={String(workItem.work_item_id)}>
+                    {"-- ".repeat(depth)}
+                    {readTrackerLevelLabel(workItem.level)} - {workItem.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              className="rounded-md whitespace-nowrap"
+              disabled={saveUpdateMutation.isPending || editingUpdateDraft.updateBody.trim() === ""}
+              onClick={() => saveUpdateMutation.mutate()}
+            >
+              <SaveIcon className="size-4" />
+              {saveUpdateMutation.isPending ? "Saving..." : "Save update"}
+            </Button>
+          </div>
+          {saveUpdateMutation.isError ? (
+            <p className="text-sm text-red-700">
+              {(saveUpdateMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                (saveUpdateMutation.error as Error).message}
+            </p>
+          ) : null}
+          <section className="border-t border-slate-100 pt-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-semibold text-slate-950">Levels from this update</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-md"
+                onClick={startNewWorkItemFromEditingUpdate}
+              >
+                <PlusIcon className="size-3.5" />
+                Create level
+              </Button>
+            </div>
+            {workItemsFromEditingUpdate.length > 0 ? (
+              <div className="mt-3 space-y-1.5">
+                {workItemsFromEditingUpdate.map((workItem) => (
+                  <div key={workItem.work_item_id} className="space-y-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex w-full min-w-0 items-center justify-between gap-3 border px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50",
+                        selectedWorkItemId === workItem.work_item_id
+                          ? "border-slate-400 bg-slate-50"
+                          : "border-slate-200 bg-white",
+                      )}
+                      onClick={() => toggleWorkItem(workItem)}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <DcxAdminTrackerLevelBadge level={workItem.level} />
+                        <span className="min-w-0 truncate text-sm font-medium text-slate-900">{workItem.title}</span>
+                      </span>
+                      <DcxAdminTrackerStatusBadge status={workItem.status} />
+                    </button>
+                    {renderWorkItemInlinePanel(workItem)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">No levels have been created from this update yet.</p>
+            )}
+            {isCreatingLevelFromThisUpdate ? <div className="mt-3">{renderWorkItemEditorPanel({ inline: true })}</div> : null}
+          </section>
+        </div>
+      </section>
+    )
+  }
+
+  function renderUpdateRowWithInlinePanel(
+    update: DcxAdminTrackerUpdate,
+    options: { showWorkItemTitle?: boolean; onOpenWorkItem?: (workItemId: number) => void } = {},
+  ) {
+    const isEditingThisUpdate = editingUpdateDraft?.updateId === update.update_id
+
+    return (
+      <div key={update.update_id} className="space-y-2">
+        <DcxAdminTrackerUpdateRow
+          update={update}
+          showWorkItemTitle={options.showWorkItemTitle}
+          isSelected={isEditingThisUpdate}
+          onOpenWorkItem={options.onOpenWorkItem}
+          onEditUpdate={(nextUpdate) => {
+            if (editingUpdateDraft?.updateId === nextUpdate.update_id) {
+              saveUpdateMutation.reset()
+              setEditingUpdateDraft(null)
+              return
+            }
+            startEditingUpdate(nextUpdate)
+          }}
+        />
+        {isEditingThisUpdate ? renderUpdateEditorPanel({ inline: true }) : null}
+      </div>
     )
   }
 
@@ -1748,12 +1925,7 @@ export function DcxAdminTrackerPage(props: Props) {
             ) : null}
           </section>
 
-          <div
-            className={cn(
-              "grid gap-6",
-              hasTrackerSidePanel ? "xl:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]" : "grid-cols-1",
-            )}
-          >
+          <div className="grid grid-cols-1 gap-6">
             <div className="flex min-w-0 flex-col gap-6">
               {props.routeView !== "updates" && props.routeView !== "team" ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
@@ -1825,6 +1997,7 @@ export function DcxAdminTrackerPage(props: Props) {
                     ) : null}
                   </div>
                   <div className="space-y-3 p-4">
+                    {isCreating && selectedWorkItemId === null ? renderWorkItemEditorPanel({ inline: true }) : null}
                     {props.routeView === "all" ? (
                       homeRootItems.length > 0 ? (
                         homeRootItems.map((workItem) => (
@@ -1834,8 +2007,9 @@ export function DcxAdminTrackerPage(props: Props) {
                             visibleIds={homeVisibleIds}
                             childrenByParent={childrenByParent}
                             selectedWorkItemId={selectedWorkItemId}
-                            onSelectWorkItem={selectWorkItem}
+                            onSelectWorkItem={toggleWorkItem}
                             onCreateChild={startNewWorkItem}
+                            renderInlinePanel={(nextWorkItem) => renderWorkItemInlinePanel(nextWorkItem)}
                           />
                         ))
                       ) : (
@@ -1843,13 +2017,15 @@ export function DcxAdminTrackerPage(props: Props) {
                       )
                     ) : filteredLevelWorkItems.length > 0 ? (
                       filteredLevelWorkItems.map((workItem) => (
-                        <DcxAdminTrackerWorkCard
-                          key={workItem.work_item_id}
-                          workItem={workItem}
-                          isSelected={selectedWorkItemId === workItem.work_item_id}
-                          onSelectWorkItem={selectWorkItem}
-                          onCreateChild={startNewWorkItem}
-                        />
+                        <div key={workItem.work_item_id} className="space-y-2">
+                          <DcxAdminTrackerWorkCard
+                            workItem={workItem}
+                            isSelected={selectedWorkItemId === workItem.work_item_id}
+                            onSelectWorkItem={toggleWorkItem}
+                            onCreateChild={startNewWorkItem}
+                          />
+                          {renderWorkItemInlinePanel(workItem)}
+                        </div>
                       ))
                     ) : (
                       <p className="px-2 py-8 text-sm text-slate-500">No levels match this view.</p>
@@ -1896,9 +2072,7 @@ export function DcxAdminTrackerPage(props: Props) {
                               <div className="space-y-1.5">
                                 {personGroup.workItemRows.map((workItemRow) => {
                                   const isInlineSelectedWorkItem =
-                                    editingUpdateDraft === null &&
-                                    !isCreating &&
-                                    selectedWorkItem?.work_item_id === workItemRow.workItem.work_item_id
+                                    selectedWorkItemId === workItemRow.workItem.work_item_id
 
                                   return (
                                     <div key={workItemRow.workItem.work_item_id} className="space-y-2">
@@ -1909,7 +2083,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                           isInlineSelectedWorkItem ? "border-slate-400 bg-slate-50" : "border-slate-200",
                                         )}
                                         aria-expanded={isInlineSelectedWorkItem}
-                                        onClick={() => toggleTeamWorkItem(workItemRow.workItem)}
+                                        onClick={() => toggleWorkItem(workItemRow.workItem)}
                                       >
                                         <span
                                           className="flex min-w-0 flex-1 items-start gap-2"
@@ -1936,7 +2110,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                           className="min-w-0"
                                           style={{ marginLeft: `${Math.min(workItemRow.depth, 4) * 1.25 + 1.5}rem` }}
                                         >
-                                          {selectedPanelMode === "edit"
+                                          {isCreating || selectedPanelMode === "edit"
                                             ? renderWorkItemEditorPanel({ inline: true })
                                             : renderSelectedWorkItemDetailPanel({ inline: true })}
                                         </div>
@@ -1953,20 +2127,9 @@ export function DcxAdminTrackerPage(props: Props) {
                             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Updates</p>
                             {personGroup.updates.length > 0 ? (
                               <div className="space-y-2">
-                                {personGroup.updates.slice(0, 6).map((update) => (
-                                  <button
-                                    key={update.update_id}
-                                    type="button"
-                                    className="w-full border border-slate-200 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
-                                    onClick={() => startEditingUpdate(update)}
-                                  >
-                                    <span className="flex flex-wrap items-center gap-2">
-                                      <DcxAdminTrackerUpdateKindBadge updateKind={update.update_kind} />
-                                      <span className="text-xs font-medium text-slate-500">{update.work_item_title}</span>
-                                    </span>
-                                    <span className="mt-1 block line-clamp-2 text-sm text-slate-800">{update.update_body}</span>
-                                  </button>
-                                ))}
+                                {personGroup.updates.slice(0, 6).map((update) =>
+                                  renderUpdateRowWithInlinePanel(update, { showWorkItemTitle: true, onOpenWorkItem: openWorkItemById }),
+                                )}
                               </div>
                             ) : (
                               <p className="text-sm text-slate-500">No updates recorded.</p>
@@ -1999,17 +2162,14 @@ export function DcxAdminTrackerPage(props: Props) {
                       </Button>
                     </div>
                   </div>
-                  <div>
+                  <div className="space-y-2">
+                    {isCreating && selectedWorkItemId === null ? (
+                      <div className="px-4 pt-4">{renderWorkItemEditorPanel({ inline: true })}</div>
+                    ) : null}
                     {visibleUpdates.length > 0 ? (
-                      visibleUpdates.map((update) => (
-                        <DcxAdminTrackerUpdateRow
-                          key={update.update_id}
-                          update={update}
-                          showWorkItemTitle
-                          onOpenWorkItem={openWorkItemById}
-                          onEditUpdate={startEditingUpdate}
-                        />
-                      ))
+                      visibleUpdates.map((update) =>
+                        renderUpdateRowWithInlinePanel(update, { showWorkItemTitle: true, onOpenWorkItem: openWorkItemById }),
+                      )
                     ) : (
                       <p className="px-6 py-6 text-sm text-slate-500">No tracker activity has been recorded yet.</p>
                     )}
@@ -2018,7 +2178,7 @@ export function DcxAdminTrackerPage(props: Props) {
               )}
             </div>
 
-            {hasTrackerSidePanel ? (
+            {shouldRenderTrackerSidePanel && hasTrackerSidePanel ? (
             <div className="flex min-w-0 flex-col gap-6">
               {editingUpdateDraft ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
