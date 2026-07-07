@@ -96,12 +96,11 @@ const trackerStatusOptions: Array<{ value: DcxAdminTrackerStatus; label: string 
 ]
 
 const trackerUpdateKindOptions: Array<{ value: DcxAdminTrackerUpdateKind; label: string }> = [
-  { value: "note", label: "Note" },
   { value: "progress", label: "Progress" },
-  { value: "blocker", label: "Blocker" },
-  { value: "decision", label: "Decision" },
+  { value: "blocker", label: "Problem" },
   { value: "question", label: "Question" },
-  { value: "action", label: "Action" },
+  { value: "decision", label: "Concepts" },
+  { value: "note", label: "Other" },
 ]
 
 function readTrackerLevelLabel(level: DcxAdminTrackerLevel): string {
@@ -125,42 +124,46 @@ function readTrackerStatusLabel(status: DcxAdminTrackerStatus): string {
 }
 
 function readTrackerUpdateKindLabel(updateKind: DcxAdminTrackerUpdateKind): string {
+  if (updateKind === "action") {
+    return "Other"
+  }
   return trackerUpdateKindOptions.find((option) => option.value === updateKind)?.label ?? updateKind
 }
 
 function readTrackerUpdateKindClassName(updateKind: DcxAdminTrackerUpdateKind): string {
   if (updateKind === "progress") {
-    return "border-emerald-700 bg-emerald-600 text-white"
+    return "border-emerald-200 bg-emerald-50 text-emerald-800"
   }
   if (updateKind === "blocker") {
-    return "border-red-700 bg-red-600 text-white"
+    return "border-red-200 bg-red-50 text-red-800"
   }
   if (updateKind === "decision") {
-    return "border-violet-700 bg-violet-600 text-white"
+    return "border-violet-200 bg-violet-50 text-violet-800"
   }
   if (updateKind === "question") {
-    return "border-amber-600 bg-amber-500 text-white"
+    return "border-amber-200 bg-amber-50 text-amber-900"
   }
-  if (updateKind === "action") {
-    return "border-sky-700 bg-sky-600 text-white"
-  }
-  return "border-slate-700 bg-slate-600 text-white"
+  return "border-slate-200 bg-slate-50 text-slate-700"
 }
 
 function readTrackerLevelClassName(level: DcxAdminTrackerLevel): string {
   if (level === "long_term") {
-    return "border-slate-900 bg-slate-800 text-white"
+    return "border-slate-600 bg-slate-100 text-slate-800"
   }
   if (level === "strategy") {
-    return "border-indigo-800 bg-indigo-700 text-white"
+    return "border-slate-500 bg-slate-50 text-slate-700"
   }
   if (level === "operation") {
-    return "border-blue-800 bg-blue-700 text-white"
+    return "border-zinc-400 bg-zinc-50 text-zinc-700"
   }
   if (level === "battle") {
-    return "border-rose-800 bg-rose-700 text-white"
+    return "border-neutral-500 bg-neutral-100 text-neutral-800"
   }
-  return "border-zinc-800 bg-zinc-700 text-white"
+  return "border-slate-300 bg-white text-slate-700"
+}
+
+function readEditableUpdateKind(updateKind: DcxAdminTrackerUpdateKind): DcxAdminTrackerUpdateKind {
+  return updateKind === "action" ? "note" : updateKind
 }
 
 function readPluralizedCount(count: number, singularLabel: string, pluralLabel = `${singularLabel}s`): string {
@@ -492,20 +495,20 @@ function DcxAdminTrackerUpdateKindSelect(props: {
   return (
     <Select value={props.value} onValueChange={(value) => props.onValueChange(value as DcxAdminTrackerUpdateKind)}>
       <SelectTrigger
-        className={cn("h-10 w-full rounded-md", readTrackerUpdateKindClassName(props.value))}
+        className="h-10 w-full rounded-md bg-white"
         aria-label={props.ariaLabel}
       >
-        <SelectValue />
+        <DcxAdminTrackerUpdateKindBadge updateKind={props.value} />
       </SelectTrigger>
       <SelectContent>
         {trackerUpdateKindOptions.map((option) => (
           <SelectItem
             key={option.value}
             value={option.value}
-            className={cn("my-1 border", readTrackerUpdateKindClassName(option.value))}
+            className="my-1"
             textValue={option.label}
           >
-            {option.label}
+            <DcxAdminTrackerUpdateKindBadge updateKind={option.value} />
           </SelectItem>
         ))}
       </SelectContent>
@@ -1056,7 +1059,7 @@ export function DcxAdminTrackerPage(props: Props) {
     setEditingUpdateDraft({
       updateId: update.update_id,
       workItemId: update.work_item_id,
-      updateKind: update.update_kind,
+      updateKind: readEditableUpdateKind(update.update_kind),
       updateBody: update.update_body,
     })
   }

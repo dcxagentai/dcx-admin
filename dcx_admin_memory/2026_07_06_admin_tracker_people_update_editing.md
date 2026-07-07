@@ -17,7 +17,10 @@ Added the second tracker polish pass on 2026-07-06:
 - Team uses `public_display_name` when available, falls back to email-derived names, and displays one vertical sequence per person: assigned levels first, then updates.
 - The user-facing tracker vocabulary now uses `Levels` for structured work rows and keeps `Updates` for activity notes. The stored work-item model remains unchanged.
 - `not_started` still stays as the stored status value, but the UI label is `Future`.
-- Level, status, and update-kind badges use stronger filled backgrounds with white text for quicker scanning.
+- Status badges use stronger filled backgrounds with white text because they carry workflow state.
+- Level badges use neutral monochrome labels so hierarchy stays visible without competing with status.
+- Update-kind badges use lighter colored chips with dark text. The user-facing categories are Progress, Problem, Question, Concepts, and Other; backend values still use the existing safe strings (`progress`, `blocker`, `question`, `decision`, `note`) for now.
+- Existing `action` updates are displayed as Other and are normalized to `note` if edited from the UI.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 - Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.
