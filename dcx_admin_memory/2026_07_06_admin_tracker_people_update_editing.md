@@ -23,6 +23,8 @@ Added the second tracker polish pass on 2026-07-06:
 - Existing `action` updates are displayed as Other and are normalized to `note` if edited from the UI.
 - Tracker badge colors now use explicit hex palettes in `dcx_admin_tracker_page.tsx` rather than relying on Tailwind color utility shades.
 - The tracker update-kind and level selectors use the shared Base UI combobox trigger/value wrapper so rich badge chips render in both the trigger and dropdown rows.
+- Tracker comboboxes disable query filtering for fixed option lists so all options remain visible after selecting one, and use tighter dropdown row padding.
+- Level badge colors use a grey ramp from near-black `#111827` through `#374151`, `#6b7280`, `#d1d5db`, to very light `#f8fafc`.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 - Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.

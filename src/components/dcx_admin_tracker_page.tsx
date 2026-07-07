@@ -180,18 +180,18 @@ function readTrackerUpdateKindPalette(updateKind: DcxAdminTrackerUpdateKind): Tr
 
 function readTrackerLevelPalette(level: DcxAdminTrackerLevel): TrackerBadgePalette {
   if (level === "long_term") {
-    return { backgroundColor: "#d1d5db", borderColor: "#374151", color: "#111827" }
+    return { backgroundColor: "#111827", borderColor: "#111827", color: "#ffffff" }
   }
   if (level === "strategy") {
-    return { backgroundColor: "#e5e7eb", borderColor: "#4b5563", color: "#1f2937" }
+    return { backgroundColor: "#374151", borderColor: "#1f2937", color: "#ffffff" }
   }
   if (level === "operation") {
-    return { backgroundColor: "#f3f4f6", borderColor: "#6b7280", color: "#374151" }
+    return { backgroundColor: "#6b7280", borderColor: "#4b5563", color: "#ffffff" }
   }
   if (level === "battle") {
-    return { backgroundColor: "#e7e5e4", borderColor: "#57534e", color: "#292524" }
+    return { backgroundColor: "#d1d5db", borderColor: "#9ca3af", color: "#111827" }
   }
-  return { backgroundColor: "#ffffff", borderColor: "#94a3b8", color: "#475569" }
+  return { backgroundColor: "#f8fafc", borderColor: "#cbd5e1", color: "#334155" }
 }
 
 function readEditableUpdateKind(updateKind: DcxAdminTrackerUpdateKind): DcxAdminTrackerUpdateKind {
@@ -533,6 +533,7 @@ function DcxAdminTrackerUpdateKindSelect(props: {
       value={selectedOption}
       itemToStringLabel={(option) => (option as DcxAdminTrackerUpdateKindOption).label}
       itemToStringValue={(option) => (option as DcxAdminTrackerUpdateKindOption).value}
+      filter={() => true}
       isItemEqualToValue={(left, right) =>
         (left as DcxAdminTrackerUpdateKindOption).value === (right as DcxAdminTrackerUpdateKindOption).value
       }
@@ -556,11 +557,12 @@ function DcxAdminTrackerUpdateKindSelect(props: {
       </ComboboxTrigger>
       <ComboboxContent>
         <ComboboxEmpty>No update types found.</ComboboxEmpty>
-        <ComboboxList>
+        <ComboboxList className="p-0.5">
           {(option) => (
             <ComboboxItem
               key={(option as DcxAdminTrackerUpdateKindOption).value}
               value={option}
+              className="gap-2 px-2 py-1.5"
             >
               <DcxAdminTrackerUpdateKindBadge updateKind={(option as DcxAdminTrackerUpdateKindOption).value} />
             </ComboboxItem>
@@ -584,6 +586,7 @@ function DcxAdminTrackerLevelCombobox(props: {
       value={selectedOption}
       itemToStringLabel={(option) => (option as DcxAdminTrackerLevelOption).label}
       itemToStringValue={(option) => (option as DcxAdminTrackerLevelOption).value}
+      filter={() => true}
       isItemEqualToValue={(left, right) =>
         (left as DcxAdminTrackerLevelOption).value === (right as DcxAdminTrackerLevelOption).value
       }
@@ -605,11 +608,12 @@ function DcxAdminTrackerLevelCombobox(props: {
       </ComboboxTrigger>
       <ComboboxContent>
         <ComboboxEmpty>No levels found.</ComboboxEmpty>
-        <ComboboxList>
+        <ComboboxList className="p-0.5">
           {(option) => (
             <ComboboxItem
               key={(option as DcxAdminTrackerLevelOption).value}
               value={option}
+              className="gap-2 px-2 py-1.5"
             >
               <DcxAdminTrackerLevelBadge level={(option as DcxAdminTrackerLevelOption).value} />
             </ComboboxItem>
