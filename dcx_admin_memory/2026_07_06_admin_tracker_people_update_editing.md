@@ -29,6 +29,7 @@ Added the second tracker polish pass on 2026-07-06:
 - The Team view renders assigned levels in hierarchy order with indentation and a small nested marker; row text only keeps descendant counts where relevant.
 - Clicking a Team level opens its detail/edit panel inline below that row, with a Hide/Cancel affordance, instead of opening the right-side panel.
 - Level rows now place the level chip and title on the same line for denser scanning, including the Team list and regular tracker level cards.
+- Team level rows no longer show descendant counts; the inline detail panel is visually attached to the row and only shows actions, description, and activity updates.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 - Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.

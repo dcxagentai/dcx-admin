@@ -1472,101 +1472,110 @@ export function DcxAdminTrackerPage(props: Props) {
     }
 
     const workItem = selectedWorkItem
+    const actionButtons = (
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {options.showHideButton ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-md"
+            onClick={hideSelectedWorkItemPanel}
+          >
+            <XIcon className="size-3.5" />
+            Hide
+          </Button>
+        ) : null}
+        {workItem.is_archived ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-md"
+            disabled={archiveWorkItemMutation.isPending}
+            onClick={() => archiveSelectedWorkItem(false)}
+          >
+            <RotateCcwIcon className="size-3.5" />
+            Restore
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-md"
+            disabled={archiveWorkItemMutation.isPending}
+            onClick={() => archiveSelectedWorkItem(true)}
+          >
+            <ArchiveIcon className="size-3.5" />
+            Archive
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-md"
+          onClick={() => {
+            setSelectedPanelMode("edit")
+            setDraft(buildTrackerDraftFromWorkItem(workItem))
+          }}
+        >
+          <EditIcon className="size-3.5" />
+          Edit
+        </Button>
+        {!workItem.is_archived ? (
+          <Button type="button" size="sm" className="rounded-md" onClick={() => startNewWorkItem(workItem)}>
+            <PlusIcon className="size-3.5" />
+            New child
+          </Button>
+        ) : null}
+      </div>
+    )
 
     return (
       <section
         className={cn(
-          "border border-black/6 bg-white",
-          options.inline ? "shadow-none" : "shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
+          "border border-black/6",
+          options.inline
+            ? "border-l-2 border-l-slate-300 bg-slate-50/70 shadow-none"
+            : "bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
         )}
       >
-        <div className="space-y-4 border-b border-black/6 px-6 py-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 space-y-2">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <DcxAdminTrackerLevelBadge level={workItem.level} />
-                <h3 className="min-w-0 break-words text-xl font-semibold tracking-tight text-slate-950">
-                  {workItem.title}
-                </h3>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-slate-400">
-                  {readTrackerPillarLabels(readTrackerPillarsForWorkItem(workItem))}
-                </span>
-                <DcxAdminTrackerStatusBadge status={workItem.status} />
-                {workItem.is_archived ? (
-                  <span className="inline-flex items-center border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    Archived
+        {options.inline ? (
+          <div className="flex justify-end border-b border-slate-200/70 px-5 py-3">{actionButtons}</div>
+        ) : (
+          <div className="space-y-4 border-b border-black/6 px-6 py-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <DcxAdminTrackerLevelBadge level={workItem.level} />
+                  <h3 className="min-w-0 break-words text-xl font-semibold tracking-tight text-slate-950">
+                    {workItem.title}
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-slate-400">
+                    {readTrackerPillarLabels(readTrackerPillarsForWorkItem(workItem))}
                   </span>
-                ) : null}
-                {workItem.assigned_to_email ? (
-                  <span className="text-xs font-medium text-slate-500">
-                    {readPersonDisplayName(workItem.assigned_to_display_name, workItem.assigned_to_email)}
-                  </span>
-                ) : null}
+                  <DcxAdminTrackerStatusBadge status={workItem.status} />
+                  {workItem.is_archived ? (
+                    <span className="inline-flex items-center border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      Archived
+                    </span>
+                  ) : null}
+                  {workItem.assigned_to_email ? (
+                    <span className="text-xs font-medium text-slate-500">
+                      {readPersonDisplayName(workItem.assigned_to_display_name, workItem.assigned_to_email)}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              {options.showHideButton ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-md"
-                  onClick={hideSelectedWorkItemPanel}
-                >
-                  <XIcon className="size-3.5" />
-                  Hide
-                </Button>
-              ) : null}
-              {workItem.is_archived ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-md"
-                  disabled={archiveWorkItemMutation.isPending}
-                  onClick={() => archiveSelectedWorkItem(false)}
-                >
-                  <RotateCcwIcon className="size-3.5" />
-                  Restore
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-md"
-                  disabled={archiveWorkItemMutation.isPending}
-                  onClick={() => archiveSelectedWorkItem(true)}
-                >
-                  <ArchiveIcon className="size-3.5" />
-                  Archive
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="rounded-md"
-                onClick={() => {
-                  setSelectedPanelMode("edit")
-                  setDraft(buildTrackerDraftFromWorkItem(workItem))
-                }}
-              >
-                <EditIcon className="size-3.5" />
-                Edit
-              </Button>
-              {!workItem.is_archived ? (
-                <Button type="button" size="sm" className="rounded-md" onClick={() => startNewWorkItem(workItem)}>
-                  <PlusIcon className="size-3.5" />
-                  New child
-                </Button>
-              ) : null}
+              {actionButtons}
             </div>
           </div>
-        </div>
-        <div className="space-y-6 px-6 py-5">
+        )}
+        <div className={cn("space-y-6", options.inline ? "px-5 py-4" : "px-6 py-5")}>
           <section>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Description</p>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
@@ -1581,7 +1590,7 @@ export function DcxAdminTrackerPage(props: Props) {
             </p>
           ) : null}
 
-          {workItem.origin_update_id ? (
+          {!options.inline && workItem.origin_update_id ? (
             <section>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Origin update</p>
               {selectedOriginUpdate ? (
@@ -1607,28 +1616,34 @@ export function DcxAdminTrackerPage(props: Props) {
             </section>
           ) : null}
 
-          <DcxAdminTrackerRelationList
-            title="Belongs to"
-            workItems={selectedAncestors}
-            emptyText="This item has no parent context."
-            onSelectWorkItem={selectWorkItem}
-          />
-
-          {trackerLevelOptions.map((levelOption) => {
-            const matchingDescendants = selectedDescendants.filter((descendant) => descendant.level === levelOption.value)
-            if (matchingDescendants.length === 0) {
-              return null
-            }
-            return (
+          {!options.inline ? (
+            <>
               <DcxAdminTrackerRelationList
-                key={levelOption.value}
-                title={`Contains ${readTrackerLevelPluralLabel(levelOption.value)}`}
-                workItems={matchingDescendants}
-                emptyText=""
+                title="Belongs to"
+                workItems={selectedAncestors}
+                emptyText="This item has no parent context."
                 onSelectWorkItem={selectWorkItem}
               />
-            )
-          })}
+
+              {trackerLevelOptions.map((levelOption) => {
+                const matchingDescendants = selectedDescendants.filter(
+                  (descendant) => descendant.level === levelOption.value,
+                )
+                if (matchingDescendants.length === 0) {
+                  return null
+                }
+                return (
+                  <DcxAdminTrackerRelationList
+                    key={levelOption.value}
+                    title={`Contains ${readTrackerLevelPluralLabel(levelOption.value)}`}
+                    workItems={matchingDescendants}
+                    emptyText=""
+                    onSelectWorkItem={selectWorkItem}
+                  />
+                )
+              })}
+            </>
+          ) : null}
 
           <section className="border border-slate-200">
             <div className="border-b border-slate-200 px-4 py-3">
@@ -1877,10 +1892,6 @@ export function DcxAdminTrackerPage(props: Props) {
                             {personGroup.workItems.length > 0 ? (
                               <div className="space-y-1.5">
                                 {personGroup.workItemRows.map((workItemRow) => {
-                                  const hierarchyMeta =
-                                    workItemRow.descendantCount > 0
-                                      ? `Contains ${readPluralizedCount(workItemRow.descendantCount, "level")}`
-                                      : ""
                                   const isInlineSelectedWorkItem =
                                     editingUpdateDraft === null &&
                                     !isCreating &&
@@ -1911,11 +1922,6 @@ export function DcxAdminTrackerPage(props: Props) {
                                                 {workItemRow.workItem.title}
                                               </span>
                                             </span>
-                                            {hierarchyMeta ? (
-                                              <span className="mt-0.5 block truncate text-xs text-slate-400">
-                                                {hierarchyMeta}
-                                              </span>
-                                            ) : null}
                                           </span>
                                         </span>
                                         <span className="shrink-0">
@@ -1923,7 +1929,10 @@ export function DcxAdminTrackerPage(props: Props) {
                                         </span>
                                       </button>
                                       {isInlineSelectedWorkItem ? (
-                                        <div>
+                                        <div
+                                          className="min-w-0"
+                                          style={{ marginLeft: `${Math.min(workItemRow.depth, 4) * 1.25 + 1.5}rem` }}
+                                        >
                                           {selectedPanelMode === "edit"
                                             ? renderWorkItemEditorPanel({ inline: true })
                                             : renderSelectedWorkItemDetailPanel({ inline: true, showHideButton: true })}
