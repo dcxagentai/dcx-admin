@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArchiveIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
   EditIcon,
   MessageSquarePlusIcon,
@@ -18,6 +19,15 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -72,7 +82,16 @@ type DcxAdminTrackerUpdateDraft = {
 
 type DcxAdminTrackerFilterValue = "all"
 
-const trackerLevelOptions: Array<{ value: DcxAdminTrackerLevel; label: string }> = [
+type TrackerBadgePalette = {
+  backgroundColor: string
+  borderColor: string
+  color: string
+}
+
+type DcxAdminTrackerLevelOption = { value: DcxAdminTrackerLevel; label: string }
+type DcxAdminTrackerUpdateKindOption = { value: DcxAdminTrackerUpdateKind; label: string }
+
+const trackerLevelOptions: DcxAdminTrackerLevelOption[] = [
   { value: "long_term", label: "Long-term" },
   { value: "strategy", label: "Strategy" },
   { value: "operation", label: "Operation" },
@@ -95,7 +114,7 @@ const trackerStatusOptions: Array<{ value: DcxAdminTrackerStatus; label: string 
   { value: "done", label: "Done" },
 ]
 
-const trackerUpdateKindOptions: Array<{ value: DcxAdminTrackerUpdateKind; label: string }> = [
+const trackerUpdateKindOptions: DcxAdminTrackerUpdateKindOption[] = [
   { value: "progress", label: "Progress" },
   { value: "blocker", label: "Problem" },
   { value: "question", label: "Question" },
@@ -130,40 +149,64 @@ function readTrackerUpdateKindLabel(updateKind: DcxAdminTrackerUpdateKind): stri
   return trackerUpdateKindOptions.find((option) => option.value === updateKind)?.label ?? updateKind
 }
 
-function readTrackerUpdateKindClassName(updateKind: DcxAdminTrackerUpdateKind): string {
-  if (updateKind === "progress") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800"
+function readTrackerStatusPalette(status: DcxAdminTrackerStatus): TrackerBadgePalette {
+  if (status === "done") {
+    return { backgroundColor: "#059669", borderColor: "#047857", color: "#ffffff" }
   }
-  if (updateKind === "blocker") {
-    return "border-red-200 bg-red-50 text-red-800"
+  if (status === "waiting") {
+    return { backgroundColor: "#f59e0b", borderColor: "#d97706", color: "#ffffff" }
   }
-  if (updateKind === "decision") {
-    return "border-violet-200 bg-violet-50 text-violet-800"
+  if (status === "active") {
+    return { backgroundColor: "#0284c7", borderColor: "#0369a1", color: "#ffffff" }
   }
-  if (updateKind === "question") {
-    return "border-amber-200 bg-amber-50 text-amber-900"
-  }
-  return "border-slate-200 bg-slate-50 text-slate-700"
+  return { backgroundColor: "#475569", borderColor: "#334155", color: "#ffffff" }
 }
 
-function readTrackerLevelClassName(level: DcxAdminTrackerLevel): string {
+function readTrackerUpdateKindPalette(updateKind: DcxAdminTrackerUpdateKind): TrackerBadgePalette {
+  if (updateKind === "progress") {
+    return { backgroundColor: "#dcfce7", borderColor: "#86efac", color: "#166534" }
+  }
+  if (updateKind === "blocker") {
+    return { backgroundColor: "#fee2e2", borderColor: "#fca5a5", color: "#991b1b" }
+  }
+  if (updateKind === "decision") {
+    return { backgroundColor: "#ede9fe", borderColor: "#c4b5fd", color: "#5b21b6" }
+  }
+  if (updateKind === "question") {
+    return { backgroundColor: "#fef3c7", borderColor: "#fcd34d", color: "#92400e" }
+  }
+  return { backgroundColor: "#f1f5f9", borderColor: "#cbd5e1", color: "#334155" }
+}
+
+function readTrackerLevelPalette(level: DcxAdminTrackerLevel): TrackerBadgePalette {
   if (level === "long_term") {
-    return "border-slate-600 bg-slate-100 text-slate-800"
+    return { backgroundColor: "#d1d5db", borderColor: "#374151", color: "#111827" }
   }
   if (level === "strategy") {
-    return "border-slate-500 bg-slate-50 text-slate-700"
+    return { backgroundColor: "#e5e7eb", borderColor: "#4b5563", color: "#1f2937" }
   }
   if (level === "operation") {
-    return "border-zinc-400 bg-zinc-50 text-zinc-700"
+    return { backgroundColor: "#f3f4f6", borderColor: "#6b7280", color: "#374151" }
   }
   if (level === "battle") {
-    return "border-neutral-500 bg-neutral-100 text-neutral-800"
+    return { backgroundColor: "#e7e5e4", borderColor: "#57534e", color: "#292524" }
   }
-  return "border-slate-300 bg-white text-slate-700"
+  return { backgroundColor: "#ffffff", borderColor: "#94a3b8", color: "#475569" }
 }
 
 function readEditableUpdateKind(updateKind: DcxAdminTrackerUpdateKind): DcxAdminTrackerUpdateKind {
   return updateKind === "action" ? "note" : updateKind
+}
+
+function readTrackerLevelOption(level: DcxAdminTrackerLevel): DcxAdminTrackerLevelOption {
+  return trackerLevelOptions.find((option) => option.value === level) ?? { value: "task", label: "Task" }
+}
+
+function readTrackerUpdateKindOption(updateKind: DcxAdminTrackerUpdateKind): DcxAdminTrackerUpdateKindOption {
+  return (
+    trackerUpdateKindOptions.find((option) => option.value === readEditableUpdateKind(updateKind)) ??
+    { value: "note", label: "Other" }
+  )
 }
 
 function readPluralizedCount(count: number, singularLabel: string, pluralLabel = `${singularLabel}s`): string {
@@ -445,17 +488,11 @@ function buildHomeMapVisibleIds(params: {
 }
 
 function DcxAdminTrackerStatusBadge(props: { status: DcxAdminTrackerStatus }) {
-  const statusClassName =
-    props.status === "done"
-      ? "border-emerald-700 bg-emerald-600 text-white"
-      : props.status === "waiting"
-        ? "border-amber-600 bg-amber-500 text-white"
-        : props.status === "active"
-          ? "border-sky-700 bg-sky-600 text-white"
-          : "border-slate-700 bg-slate-600 text-white"
-
   return (
-    <span className={cn("inline-flex items-center border px-2 py-0.5 text-xs font-medium", statusClassName)}>
+    <span
+      className="inline-flex items-center border px-2 py-0.5 text-xs font-medium"
+      style={readTrackerStatusPalette(props.status)}
+    >
       {readTrackerStatusLabel(props.status)}
     </span>
   )
@@ -464,10 +501,8 @@ function DcxAdminTrackerStatusBadge(props: { status: DcxAdminTrackerStatus }) {
 function DcxAdminTrackerLevelBadge(props: { level: DcxAdminTrackerLevel }) {
   return (
     <span
-      className={cn(
-        "inline-flex items-center border px-2 py-0.5 text-xs font-semibold uppercase",
-        readTrackerLevelClassName(props.level),
-      )}
+      className="inline-flex items-center border px-2 py-0.5 text-xs font-semibold uppercase"
+      style={readTrackerLevelPalette(props.level)}
     >
       {readTrackerLevelLabel(props.level)}
     </span>
@@ -477,10 +512,8 @@ function DcxAdminTrackerLevelBadge(props: { level: DcxAdminTrackerLevel }) {
 function DcxAdminTrackerUpdateKindBadge(props: { updateKind: DcxAdminTrackerUpdateKind }) {
   return (
     <span
-      className={cn(
-        "inline-flex items-center border px-2 py-0.5 text-xs font-medium",
-        readTrackerUpdateKindClassName(props.updateKind),
-      )}
+      className="inline-flex items-center border px-2 py-0.5 text-xs font-medium"
+      style={readTrackerUpdateKindPalette(props.updateKind)}
     >
       {readTrackerUpdateKindLabel(props.updateKind)}
     </span>
@@ -492,27 +525,98 @@ function DcxAdminTrackerUpdateKindSelect(props: {
   onValueChange: (value: DcxAdminTrackerUpdateKind) => void
   ariaLabel: string
 }) {
+  const selectedOption = readTrackerUpdateKindOption(props.value)
+
   return (
-    <Select value={props.value} onValueChange={(value) => props.onValueChange(value as DcxAdminTrackerUpdateKind)}>
-      <SelectTrigger
-        className="h-10 w-full rounded-md bg-white"
-        aria-label={props.ariaLabel}
-      >
-        <DcxAdminTrackerUpdateKindBadge updateKind={props.value} />
-      </SelectTrigger>
-      <SelectContent>
-        {trackerUpdateKindOptions.map((option) => (
-          <SelectItem
-            key={option.value}
-            value={option.value}
-            className="my-1"
-            textValue={option.label}
-          >
-            <DcxAdminTrackerUpdateKindBadge updateKind={option.value} />
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Combobox
+      items={trackerUpdateKindOptions}
+      value={selectedOption}
+      itemToStringLabel={(option) => (option as DcxAdminTrackerUpdateKindOption).label}
+      itemToStringValue={(option) => (option as DcxAdminTrackerUpdateKindOption).value}
+      isItemEqualToValue={(left, right) =>
+        (left as DcxAdminTrackerUpdateKindOption).value === (right as DcxAdminTrackerUpdateKindOption).value
+      }
+      onValueChange={(option) => {
+        if (!option) {
+          return
+        }
+        props.onValueChange((option as DcxAdminTrackerUpdateKindOption).value)
+      }}
+      autoHighlight
+    >
+      <ComboboxTrigger aria-label={props.ariaLabel}>
+        <ComboboxValue>
+          {(option) => (
+            <DcxAdminTrackerUpdateKindBadge
+              updateKind={((option as DcxAdminTrackerUpdateKindOption | null)?.value ?? selectedOption.value)}
+            />
+          )}
+        </ComboboxValue>
+        <ChevronDownIcon className="size-4 shrink-0 text-slate-400" />
+      </ComboboxTrigger>
+      <ComboboxContent>
+        <ComboboxEmpty>No update types found.</ComboboxEmpty>
+        <ComboboxList>
+          {(option) => (
+            <ComboboxItem
+              key={(option as DcxAdminTrackerUpdateKindOption).value}
+              value={option}
+            >
+              <DcxAdminTrackerUpdateKindBadge updateKind={(option as DcxAdminTrackerUpdateKindOption).value} />
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
+}
+
+function DcxAdminTrackerLevelCombobox(props: {
+  value: DcxAdminTrackerLevel
+  onValueChange: (value: DcxAdminTrackerLevel) => void
+  ariaLabel: string
+}) {
+  const selectedOption = readTrackerLevelOption(props.value)
+
+  return (
+    <Combobox
+      items={trackerLevelOptions}
+      value={selectedOption}
+      itemToStringLabel={(option) => (option as DcxAdminTrackerLevelOption).label}
+      itemToStringValue={(option) => (option as DcxAdminTrackerLevelOption).value}
+      isItemEqualToValue={(left, right) =>
+        (left as DcxAdminTrackerLevelOption).value === (right as DcxAdminTrackerLevelOption).value
+      }
+      onValueChange={(option) => {
+        if (!option) {
+          return
+        }
+        props.onValueChange((option as DcxAdminTrackerLevelOption).value)
+      }}
+      autoHighlight
+    >
+      <ComboboxTrigger aria-label={props.ariaLabel}>
+        <ComboboxValue>
+          {(option) => (
+            <DcxAdminTrackerLevelBadge level={((option as DcxAdminTrackerLevelOption | null)?.value ?? selectedOption.value)} />
+          )}
+        </ComboboxValue>
+        <ChevronDownIcon className="size-4 shrink-0 text-slate-400" />
+      </ComboboxTrigger>
+      <ComboboxContent>
+        <ComboboxEmpty>No levels found.</ComboboxEmpty>
+        <ComboboxList>
+          {(option) => (
+            <ComboboxItem
+              key={(option as DcxAdminTrackerLevelOption).value}
+              value={option}
+            >
+              <DcxAdminTrackerLevelBadge level={(option as DcxAdminTrackerLevelOption).value} />
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   )
 }
 
@@ -1577,14 +1681,16 @@ export function DcxAdminTrackerPage(props: Props) {
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <TrackerSelect
-                        label="Level"
-                        value={draft.level}
-                        options={trackerLevelOptions}
-                        onValueChange={(value) =>
-                          setDraft((currentDraft) => ({ ...currentDraft, level: value as DcxAdminTrackerLevel }))
-                        }
-                      />
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Level</label>
+                        <DcxAdminTrackerLevelCombobox
+                          value={draft.level}
+                          ariaLabel="Level"
+                          onValueChange={(level) =>
+                            setDraft((currentDraft) => ({ ...currentDraft, level }))
+                          }
+                        />
+                      </div>
                       <TrackerPillarMultiSelect
                         selectedPillars={draft.pillars}
                         onTogglePillar={toggleDraftPillar}

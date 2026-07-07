@@ -6,6 +6,23 @@ import { cn } from "@/lib/utils"
 
 const Combobox = ComboboxPrimitive.Root
 
+const ComboboxTrigger = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<typeof ComboboxPrimitive.Trigger>
+>(({ className, ...props }, ref) => (
+  <ComboboxPrimitive.Trigger
+    ref={ref}
+    className={cn(
+      "flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-white px-3 text-sm text-slate-950 shadow-none outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50",
+      className,
+    )}
+    {...props}
+  />
+))
+ComboboxTrigger.displayName = "ComboboxTrigger"
+
+const ComboboxValue = ComboboxPrimitive.Value
+
 const ComboboxInput = React.forwardRef<
   HTMLInputElement,
   React.ComponentProps<typeof ComboboxPrimitive.Input>
@@ -106,5 +123,7 @@ export {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
+  ComboboxTrigger,
   ComboboxTriggerIcon,
+  ComboboxValue,
 }

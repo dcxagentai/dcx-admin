@@ -21,6 +21,8 @@ Added the second tracker polish pass on 2026-07-06:
 - Level badges use neutral monochrome labels so hierarchy stays visible without competing with status.
 - Update-kind badges use lighter colored chips with dark text. The user-facing categories are Progress, Problem, Question, Concepts, and Other; backend values still use the existing safe strings (`progress`, `blocker`, `question`, `decision`, `note`) for now.
 - Existing `action` updates are displayed as Other and are normalized to `note` if edited from the UI.
+- Tracker badge colors now use explicit hex palettes in `dcx_admin_tracker_page.tsx` rather than relying on Tailwind color utility shades.
+- The tracker update-kind and level selectors use the shared Base UI combobox trigger/value wrapper so rich badge chips render in both the trigger and dropdown rows.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 - Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.
