@@ -94,7 +94,6 @@ type DcxAdminTrackerTeamWorkItemRow = {
   workItem: DcxAdminTrackerWorkItem
   depth: number
   parentTrail: DcxAdminTrackerWorkItem[]
-  descendantCount: number
 }
 
 const trackerLevelOptions: DcxAdminTrackerLevelOption[] = [
@@ -476,6 +475,8 @@ function buildTeamWorkItemRows(params: {
   childrenByParent: Map<number | null, DcxAdminTrackerWorkItem[]>
   treeOrderById: Map<number, number>
 }): DcxAdminTrackerTeamWorkItemRow[] {
+  const assignedWorkItemIds = new Set(params.assignedWorkItems.map((workItem) => workItem.work_item_id))
+
   return [...params.assignedWorkItems]
     .sort((left, right) => {
       const leftOrder = params.treeOrderById.get(left.work_item_id) ?? Number.MAX_SAFE_INTEGER
@@ -484,11 +485,11 @@ function buildTeamWorkItemRows(params: {
     })
     .map((workItem) => {
       const breadcrumb = buildAncestorTrail({ workItem, workItems: params.allWorkItems })
+      const parentTrail = breadcrumb.slice(0, -1)
       return {
         workItem,
-        depth: Math.max(0, breadcrumb.length - 1),
-        parentTrail: breadcrumb.slice(0, -1),
-        descendantCount: collectDescendantWorkItems(params.childrenByParent, workItem.work_item_id).length,
+        depth: parentTrail.filter((parentWorkItem) => assignedWorkItemIds.has(parentWorkItem.work_item_id)).length,
+        parentTrail,
       }
     })
 }
@@ -1185,11 +1186,20 @@ export function DcxAdminTrackerPage(props: Props) {
     () =>
       assignableUsers.map((user) => {
         const assignedWorkItems = activeWorkItems.filter((workItem) => workItem.assigned_to_user_id === user.user_id)
+        const assignedLevelWorkItems = assignedWorkItems.filter((workItem) => workItem.level !== "task")
+        const assignedTaskWorkItems = assignedWorkItems.filter((workItem) => workItem.level === "task")
         return {
           user,
-          workItems: assignedWorkItems,
-          workItemRows: buildTeamWorkItemRows({
-            assignedWorkItems,
+          levelWorkItems: assignedLevelWorkItems,
+          taskWorkItems: assignedTaskWorkItems,
+          levelRows: buildTeamWorkItemRows({
+            assignedWorkItems: assignedLevelWorkItems,
+            allWorkItems: activeWorkItems,
+            childrenByParent: activeChildrenByParent,
+            treeOrderById: activeTreeOrderById,
+          }),
+          taskRows: buildTeamWorkItemRows({
+            assignedWorkItems: assignedTaskWorkItems,
             allWorkItems: activeWorkItems,
             childrenByParent: activeChildrenByParent,
             treeOrderById: activeTreeOrderById,
@@ -2060,7 +2070,8 @@ export function DcxAdminTrackerPage(props: Props) {
                               {readPersonDisplayName(personGroup.user.display_name, personGroup.user.primary_email)}
                             </h4>
                             <p className="text-xs text-slate-400">
-                              {readPluralizedCount(personGroup.workItems.length, "level")},{" "}
+                              {readPluralizedCount(personGroup.levelWorkItems.length, "level")},{" "}
+                              {readPluralizedCount(personGroup.taskWorkItems.length, "task")},{" "}
                               {readPluralizedCount(personGroup.updates.length, "update")}
                             </p>
                           </div>
@@ -2068,9 +2079,9 @@ export function DcxAdminTrackerPage(props: Props) {
                         <div className="space-y-5 p-4">
                           <section>
                             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Levels</p>
-                            {personGroup.workItems.length > 0 ? (
+                            {personGroup.levelWorkItems.length > 0 ? (
                               <div className="space-y-1.5">
-                                {personGroup.workItemRows.map((workItemRow) => {
+                                {personGroup.levelRows.map((workItemRow) => {
                                   const isInlineSelectedWorkItem =
                                     selectedWorkItemId === workItemRow.workItem.work_item_id
 
@@ -2121,6 +2132,70 @@ export function DcxAdminTrackerPage(props: Props) {
                               </div>
                             ) : (
                               <p className="text-sm text-slate-500">No assigned levels.</p>
+                            )}
+                          </section>
+                          <section>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tasks</p>
+                            {personGroup.taskWorkItems.length > 0 ? (
+                              <div className="space-y-1.5">
+                                {personGroup.taskRows.map((workItemRow) => {
+                                  const isInlineSelectedWorkItem =
+                                    selectedWorkItemId === workItemRow.workItem.work_item_id
+                                  const parentContext = workItemRow.parentTrail
+                                    .map((parentWorkItem) => {
+                                      const parentOwnerName =
+                                        parentWorkItem.assigned_to_user_id !== null &&
+                                        parentWorkItem.assigned_to_user_id !== personGroup.user.user_id
+                                          ? ` @${readPersonDisplayName(
+                                              parentWorkItem.assigned_to_display_name,
+                                              parentWorkItem.assigned_to_email,
+                                            )}`
+                                          : ""
+                                      return `${parentWorkItem.title}${parentOwnerName}`
+                                    })
+                                    .join(" > ")
+
+                                  return (
+                                    <div key={workItemRow.workItem.work_item_id} className="space-y-2">
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "flex w-full items-center justify-between gap-3 border px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50",
+                                          isInlineSelectedWorkItem ? "border-slate-400 bg-slate-50" : "border-slate-200",
+                                        )}
+                                        aria-expanded={isInlineSelectedWorkItem}
+                                        onClick={() => toggleWorkItem(workItemRow.workItem)}
+                                      >
+                                        <span className="min-w-0">
+                                          <span className="flex min-w-0 items-center gap-2">
+                                            <DcxAdminTrackerLevelBadge level={workItemRow.workItem.level} />
+                                            <span className="min-w-0 truncate text-sm font-medium text-slate-900">
+                                              {workItemRow.workItem.title}
+                                            </span>
+                                          </span>
+                                          {parentContext ? (
+                                            <span className="mt-1 block truncate text-xs text-slate-400">
+                                              {parentContext}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                        <span className="shrink-0">
+                                          <DcxAdminTrackerStatusBadge status={workItemRow.workItem.status} />
+                                        </span>
+                                      </button>
+                                      {isInlineSelectedWorkItem ? (
+                                        <div className="min-w-0 pl-6">
+                                          {isCreating || selectedPanelMode === "edit"
+                                            ? renderWorkItemEditorPanel({ inline: true })
+                                            : renderSelectedWorkItemDetailPanel({ inline: true })}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-500">No assigned tasks.</p>
                             )}
                           </section>
                           <section>
