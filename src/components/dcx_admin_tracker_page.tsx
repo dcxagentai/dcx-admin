@@ -43,7 +43,7 @@ import {
 import { saveDcxAdminTrackerUpdate } from "@/lib/save_dcx_admin_tracker_update"
 import { saveDcxAdminTrackerWorkItem } from "@/lib/save_dcx_admin_tracker_work_item"
 
-export type DcxAdminTrackerView = "all" | DcxAdminTrackerLevel | "updates" | "who" | "archived"
+export type DcxAdminTrackerView = "all" | DcxAdminTrackerLevel | "updates" | "team" | "archived"
 
 type Props = {
   apiBaseUrl: string
@@ -147,15 +147,18 @@ function readTrackerUpdateKindClassName(updateKind: DcxAdminTrackerUpdateKind): 
   return "border-slate-200 bg-slate-50 text-slate-600"
 }
 
-function readPersonDisplayName(email: string | null): string {
-  if (!email) {
+function readPersonDisplayName(displayNameOrEmail: string | null, fallbackEmail: string | null = null): string {
+  const preferredName = displayNameOrEmail?.trim() ?? ""
+  const fallbackName = fallbackEmail?.trim() ?? ""
+  const rawName = preferredName !== "" ? preferredName : fallbackName
+  if (rawName === "") {
     return "Unknown"
   }
 
-  const localPart = email.split("@")[0] ?? email
-  const firstToken = localPart.split(/[._+\-\s]+/).filter(Boolean)[0] ?? localPart
+  const nameWithoutEmailDomain = rawName.includes("@") ? (rawName.split("@")[0] ?? rawName) : rawName
+  const firstToken = nameWithoutEmailDomain.split(/[._+\-\s]+/).filter(Boolean)[0] ?? nameWithoutEmailDomain
   if (firstToken.trim() === "") {
-    return email
+    return rawName
   }
   return `${firstToken.charAt(0).toUpperCase()}${firstToken.slice(1).toLowerCase()}`
 }
@@ -192,8 +195,8 @@ function readTrackerViewTitle(view: DcxAdminTrackerView): string {
   if (view === "updates") {
     return "Updates"
   }
-  if (view === "who") {
-    return "Who"
+  if (view === "team") {
+    return "Team"
   }
   if (view === "archived") {
     return "Archived"
@@ -491,7 +494,10 @@ function DcxAdminTrackerUpdateRow(props: {
     <div className="border-b border-slate-100 px-4 py-3 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <DcxAdminTrackerUpdateKindBadge updateKind={props.update.update_kind} />
+          <span className="text-xs font-medium text-slate-500">
+            {readPersonDisplayName(props.update.author_display_name, props.update.author_email)}
+          </span>
+          <span className="text-xs text-slate-400">{formatTrackerTimestampLabel(props.update.created_at_ts_ms)}</span>
           {props.showWorkItemTitle && props.onOpenWorkItem ? (
             <button
               type="button"
@@ -503,12 +509,10 @@ function DcxAdminTrackerUpdateRow(props: {
           ) : props.showWorkItemTitle ? (
             <span className="text-xs font-medium text-slate-500">{props.update.work_item_title}</span>
           ) : null}
-          <span className="text-xs text-slate-400">
-            {readPersonDisplayName(props.update.author_email)} - {formatTrackerTimestampLabel(props.update.created_at_ts_ms)}
-          </span>
+          <DcxAdminTrackerUpdateKindBadge updateKind={props.update.update_kind} />
           {wasEdited ? (
             <span className="text-xs text-slate-400">
-              Edited by {readPersonDisplayName(props.update.updated_by_email)}
+              Edited by {readPersonDisplayName(props.update.updated_by_display_name, props.update.updated_by_email)}
             </span>
           ) : null}
         </div>
@@ -562,7 +566,7 @@ function DcxAdminTrackerWorkCard(props: {
           ) : null}
           {props.workItem.assigned_to_email ? (
             <span className="text-xs font-medium text-slate-500">
-              {readPersonDisplayName(props.workItem.assigned_to_email)}
+              {readPersonDisplayName(props.workItem.assigned_to_display_name, props.workItem.assigned_to_email)}
             </span>
           ) : null}
           <span className="text-xs text-slate-400">{props.workItem.update_count}</span>
@@ -751,9 +755,9 @@ function TrackerAssigneeSelect(props: {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">Unassigned</SelectItem>
-          {props.assignableUsers.map((user) => (
+        {props.assignableUsers.map((user) => (
             <SelectItem key={user.user_id} value={String(user.user_id)}>
-              {readPersonDisplayName(user.primary_email)}
+              {readPersonDisplayName(user.display_name, user.primary_email)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -930,7 +934,7 @@ export function DcxAdminTrackerPage(props: Props) {
         (workItem) =>
           props.routeView !== "all" &&
           props.routeView !== "updates" &&
-          props.routeView !== "who" &&
+          props.routeView !== "team" &&
           props.routeView !== "archived" &&
           workItem.level === props.routeView &&
           readWorkItemMatchesTrackerFilters({ workItem, searchValue, pillarFilter, statusFilter }),
@@ -973,7 +977,7 @@ export function DcxAdminTrackerPage(props: Props) {
       ? homeVisibleIds.size
       : props.routeView === "updates"
         ? visibleUpdates.length
-        : props.routeView === "who"
+        : props.routeView === "team"
           ? trackerPersonGroups.length
           : filteredLevelWorkItems.length
   const totalViewItemCount =
@@ -981,7 +985,7 @@ export function DcxAdminTrackerPage(props: Props) {
       ? activeWorkItems.filter((workItem) => workItem.level !== "task").length
       : props.routeView === "updates"
         ? visibleUpdates.length
-        : props.routeView === "who"
+        : props.routeView === "team"
           ? trackerPersonGroups.length
           : props.routeView === "archived"
             ? archivedWorkItems.length
@@ -1163,7 +1167,7 @@ export function DcxAdminTrackerPage(props: Props) {
             )}
           >
             <div className="flex min-w-0 flex-col gap-6">
-              {props.routeView !== "updates" && props.routeView !== "who" ? (
+              {props.routeView !== "updates" && props.routeView !== "team" ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
                   <div className="space-y-4 border-b border-black/6 px-6 py-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1264,10 +1268,10 @@ export function DcxAdminTrackerPage(props: Props) {
                     )}
                   </div>
                 </section>
-              ) : props.routeView === "who" ? (
+              ) : props.routeView === "team" ? (
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
                   <div className="flex flex-col gap-3 border-b border-black/6 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-                    <h3 className="text-lg font-semibold tracking-tight text-slate-950">Who</h3>
+                    <h3 className="text-lg font-semibold tracking-tight text-slate-950">Team</h3>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="mr-2 text-sm text-slate-500">Showing {trackerPersonGroups.length} people</p>
                       <Button
@@ -1288,15 +1292,15 @@ export function DcxAdminTrackerPage(props: Props) {
                       <section key={personGroup.user.user_id} className="border border-slate-200 bg-white">
                         <div className="border-b border-slate-100 px-4 py-3">
                           <h4 className="text-base font-semibold tracking-tight text-slate-950">
-                            {readPersonDisplayName(personGroup.user.primary_email)}
+                            {readPersonDisplayName(personGroup.user.display_name, personGroup.user.primary_email)}
                           </h4>
                           <p className="mt-0.5 text-xs text-slate-400">
-                            {personGroup.workItems.length} items, {personGroup.updates.length} updates
+                            {personGroup.workItems.length} tasks, {personGroup.updates.length} updates
                           </p>
                         </div>
-                        <div className="grid gap-0 lg:grid-cols-2">
-                          <div className="border-b border-slate-100 p-4 lg:border-b-0 lg:border-r">
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Items</p>
+                        <div className="space-y-5 p-4">
+                          <section>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tasks</p>
                             {personGroup.workItems.length > 0 ? (
                               <div className="space-y-1.5">
                                 {personGroup.workItems.map((workItem) => (
@@ -1317,10 +1321,10 @@ export function DcxAdminTrackerPage(props: Props) {
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-slate-500">No assigned items.</p>
+                              <p className="text-sm text-slate-500">No assigned tasks.</p>
                             )}
-                          </div>
-                          <div className="p-4">
+                          </section>
+                          <section>
                             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Updates</p>
                             {personGroup.updates.length > 0 ? (
                               <div className="space-y-2">
@@ -1342,7 +1346,7 @@ export function DcxAdminTrackerPage(props: Props) {
                             ) : (
                               <p className="text-sm text-slate-500">No updates recorded.</p>
                             )}
-                          </div>
+                          </section>
                         </div>
                       </section>
                     ))}
@@ -1647,7 +1651,10 @@ export function DcxAdminTrackerPage(props: Props) {
                           ) : null}
                           {selectedWorkItem.assigned_to_email ? (
                             <span className="text-xs font-medium text-slate-500">
-                              {readPersonDisplayName(selectedWorkItem.assigned_to_email)}
+                              {readPersonDisplayName(
+                                selectedWorkItem.assigned_to_display_name,
+                                selectedWorkItem.assigned_to_email,
+                              )}
                             </span>
                           ) : null}
                         </div>
@@ -1735,7 +1742,10 @@ export function DcxAdminTrackerPage(props: Props) {
                             <span className="flex flex-wrap items-center gap-2">
                               <DcxAdminTrackerUpdateKindBadge updateKind={selectedOriginUpdate.update_kind} />
                               <span className="text-xs text-slate-400">
-                                {readPersonDisplayName(selectedOriginUpdate.author_email)} -{" "}
+                                {readPersonDisplayName(
+                                  selectedOriginUpdate.author_display_name,
+                                  selectedOriginUpdate.author_email,
+                                )}{" "}
                                 {formatTrackerTimestampLabel(selectedOriginUpdate.created_at_ts_ms)}
                               </span>
                             </span>

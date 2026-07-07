@@ -96,8 +96,8 @@ function readDcxAdminTrackerViewFromPathname(pathname: string): DcxAdminTrackerV
   if (trackerSegment === "updates") {
     return "updates"
   }
-  if (trackerSegment === "who") {
-    return "who"
+  if (trackerSegment === "team" || trackerSegment === "who") {
+    return "team"
   }
   if (trackerSegment === "archived") {
     return "archived"

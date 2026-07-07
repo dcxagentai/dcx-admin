@@ -23,6 +23,7 @@ export type DcxAdminTrackerWorkItem = {
   origin_update_id: number | null
   assigned_to_user_id: number | null
   assigned_to_email: string | null
+  assigned_to_display_name: string | null
   is_archived: boolean
   archived_by_user_id: number | null
   archived_by_email: string | null
@@ -43,19 +44,23 @@ export type DcxAdminTrackerUpdate = {
   work_item_title: string
   author_user_id: number | null
   author_email: string | null
+  author_display_name: string | null
   update_kind: DcxAdminTrackerUpdateKind
   update_body: string
   created_at_ts_ms: number
   updated_at_ts_ms: number
   updated_by_user_id: number | null
   updated_by_email: string | null
+  updated_by_display_name: string | null
 }
 
 export type DcxAdminTrackerAssignableUser = {
   user_id: number
   primary_email: string
+  display_name: string | null
   user_role: string
   account_status: string
+  is_tracker_team_member: boolean
 }
 
 type SuccessResponse = {

@@ -52,6 +52,18 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
       isActive: currentPathname === "/tracker" || currentPathname.startsWith("/tracker/"),
       items: [
         {
+          id: "tracker_team",
+          title: "Team",
+          url: "/tracker/team",
+          isActive: currentPathname === "/tracker/team" || currentPathname === "/tracker/who",
+        },
+        {
+          id: "tracker_updates",
+          title: "Updates",
+          url: "/tracker/updates",
+          isActive: currentPathname === "/tracker/updates",
+        },
+        {
           id: "tracker_long_term",
           title: "Long-term",
           url: "/tracker/long-term",
@@ -80,18 +92,6 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
           title: "Tasks",
           url: "/tracker/tasks",
           isActive: currentPathname === "/tracker/tasks",
-        },
-        {
-          id: "tracker_updates",
-          title: "Updates",
-          url: "/tracker/updates",
-          isActive: currentPathname === "/tracker/updates",
-        },
-        {
-          id: "tracker_who",
-          title: "Who",
-          url: "/tracker/who",
-          isActive: currentPathname === "/tracker/who",
         },
         {
           id: "tracker_archived",

@@ -5,7 +5,7 @@
  * premium interface before editing, roles, and broader admin navigation exist.
  */
 import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   createColumnHelper,
   type SortingState,
@@ -35,6 +35,7 @@ import {
   type DcxAdminUserListRow,
 } from "../lib/read_dcx_admin_users_list"
 import { readDcxAdminUserDetail } from "../lib/read_dcx_admin_user_detail"
+import { saveDcxAdminUserTrackerTeamMembership } from "../lib/save_dcx_admin_user_tracker_team_membership"
 
 type Props = {
   apiBaseUrl: string
@@ -110,6 +111,10 @@ function buildDcxAdminDirectoryGroups(users: DcxAdminUserListRow[]) {
 function readDcxAdminDirectoryColumnWidthClass(columnId: string): string {
   if (columnId === "primary_email_value") {
     return "w-[14rem]"
+  }
+
+  if (columnId === "tracker_team") {
+    return "w-[5rem]"
   }
 
   if (columnId === "primary_email_status" || columnId === "primary_phone_status") {
@@ -197,6 +202,16 @@ const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
           {cellContext.row.original.email_communication_preference}
         </p>
       </div>
+    ),
+  }),
+  dcxAdminDirectoryColumnHelper.display({
+    id: "tracker_team",
+    header: "Team",
+    enableHiding: false,
+    cell: (cellContext) => (
+      <span className="block whitespace-nowrap text-sm font-medium text-slate-700">
+        {cellContext.row.original.is_tracker_team_member ? "Team" : "-"}
+      </span>
     ),
   }),
   dcxAdminDirectoryColumnHelper.display({
@@ -362,6 +377,7 @@ function DcxAdminUsersDirectoryTableSection(props: {
 }
 
 export function DcxAdminUsersListPage(props: Props) {
+  const queryClient = useQueryClient()
   const [emailFilterValue, setEmailFilterValue] = useState("")
   const [selectedUser, setSelectedUser] = useState<DcxAdminUserListRow | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
@@ -383,6 +399,23 @@ export function DcxAdminUsersListPage(props: Props) {
         apiBaseUrl: props.apiBaseUrl,
         userId: selectedUser?.user_id ?? 0,
       }),
+  })
+  const trackerTeamMembershipMutation = useMutation({
+    mutationFn: async (params: { userId: number; isTrackerTeamMember: boolean }) =>
+      saveDcxAdminUserTrackerTeamMembership({
+        apiBaseUrl: props.apiBaseUrl,
+        userId: params.userId,
+        isTrackerTeamMember: params.isTrackerTeamMember,
+      }),
+    onSuccess: async (result) => {
+      setSelectedUser((currentUser) =>
+        currentUser?.user_id === result.data.user_id
+          ? { ...currentUser, is_tracker_team_member: result.data.is_tracker_team_member }
+          : currentUser,
+      )
+      await queryClient.invalidateQueries({ queryKey: ["dcx_admin_users_list"] })
+      await queryClient.invalidateQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
+    },
   })
 
   const users = usersListQuery.data?.data.users ?? []
@@ -450,6 +483,8 @@ export function DcxAdminUsersListPage(props: Props) {
                         const headerLabel =
                           columnId === "primary_email_value"
                             ? "Email"
+                            : columnId === "tracker_team"
+                              ? "Team"
                             : columnId === "primary_email_status"
                               ? "Email status"
                               : columnId === "primary_phone_status"
@@ -474,6 +509,7 @@ export function DcxAdminUsersListPage(props: Props) {
                             checked={isVisible}
                             disabled={
                               columnId === "primary_email_value"
+                              || columnId === "tracker_team"
                               || columnId === "primary_email_status"
                               || columnId === "primary_phone_status"
                             }
@@ -562,10 +598,41 @@ export function DcxAdminUsersListPage(props: Props) {
               </SheetHeader>
               <section className="bg-white px-6 py-5">
               <div className="mb-4 flex flex-col gap-2 border-b border-black/6 pb-4">
-                <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">User detail</p>
                   <h3 className="text-xl font-semibold tracking-tight text-slate-950">{selectedUser?.primary_email}</h3>
+                  {selectedUser?.public_display_name ? (
+                    <p className="mt-1 text-sm text-slate-500">{selectedUser.public_display_name}</p>
+                  ) : null}
+                  </div>
+                  {selectedUser ? (
+                    <Button
+                      type="button"
+                      variant={selectedUser.is_tracker_team_member ? "default" : "outline"}
+                      className="rounded-md"
+                      disabled={trackerTeamMembershipMutation.isPending}
+                      onClick={() =>
+                        trackerTeamMembershipMutation.mutate({
+                          userId: selectedUser.user_id,
+                          isTrackerTeamMember: !selectedUser.is_tracker_team_member,
+                        })
+                      }
+                    >
+                      {trackerTeamMembershipMutation.isPending
+                        ? "Saving..."
+                        : selectedUser.is_tracker_team_member
+                          ? "In Team"
+                          : "Add to Team"}
+                    </Button>
+                  ) : null}
                 </div>
+                {trackerTeamMembershipMutation.isError ? (
+                  <p className="text-sm text-red-700">
+                    {(trackerTeamMembershipMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                      (trackerTeamMembershipMutation.error as Error).message}
+                  </p>
+                ) : null}
               </div>
 
               {selectedUserDetailQuery.isLoading ? <p className="text-sm text-slate-500">Loading user detail...</p> : null}
