@@ -90,6 +90,12 @@ type TrackerBadgePalette = {
 
 type DcxAdminTrackerLevelOption = { value: DcxAdminTrackerLevel; label: string }
 type DcxAdminTrackerUpdateKindOption = { value: DcxAdminTrackerUpdateKind; label: string }
+type DcxAdminTrackerTeamWorkItemRow = {
+  workItem: DcxAdminTrackerWorkItem
+  depth: number
+  parentTrail: DcxAdminTrackerWorkItem[]
+  descendantCount: number
+}
 
 const trackerLevelOptions: DcxAdminTrackerLevelOption[] = [
   { value: "long_term", label: "Long-term" },
@@ -308,6 +314,14 @@ function buildBlankTrackerDraft(
   }
 }
 
+function readDraftTitleFromComposerText(composerText: string): string {
+  const normalizedText = composerText.trim().replace(/\s+/g, " ")
+  if (normalizedText.length <= 96) {
+    return normalizedText
+  }
+  return `${normalizedText.slice(0, 93).trim()}...`
+}
+
 function buildTrackerDraftFromWorkItem(workItem: DcxAdminTrackerWorkItem): DcxAdminTrackerDraft {
   return {
     workItemId: workItem.work_item_id,
@@ -426,6 +440,57 @@ function buildParentOptionRows(params: {
 
   visit(null, 0)
   return rows
+}
+
+function buildWorkItemTreeOrder(childrenByParent: Map<number | null, DcxAdminTrackerWorkItem[]>): Map<number, number> {
+  const orderById = new Map<number, number>()
+  const visitedIds = new Set<number>()
+  let nextOrder = 0
+
+  function visit(parentWorkItemId: number | null): void {
+    const children = childrenByParent.get(parentWorkItemId) ?? []
+    for (const child of children) {
+      if (visitedIds.has(child.work_item_id)) {
+        continue
+      }
+      visitedIds.add(child.work_item_id)
+      orderById.set(child.work_item_id, nextOrder)
+      nextOrder += 1
+      visit(child.work_item_id)
+    }
+  }
+
+  visit(null)
+  for (const children of childrenByParent.values()) {
+    for (const child of children) {
+      visit(child.parent_work_item_id ?? null)
+    }
+  }
+
+  return orderById
+}
+
+function buildTeamWorkItemRows(params: {
+  assignedWorkItems: DcxAdminTrackerWorkItem[]
+  allWorkItems: DcxAdminTrackerWorkItem[]
+  childrenByParent: Map<number | null, DcxAdminTrackerWorkItem[]>
+  treeOrderById: Map<number, number>
+}): DcxAdminTrackerTeamWorkItemRow[] {
+  return [...params.assignedWorkItems]
+    .sort((left, right) => {
+      const leftOrder = params.treeOrderById.get(left.work_item_id) ?? Number.MAX_SAFE_INTEGER
+      const rightOrder = params.treeOrderById.get(right.work_item_id) ?? Number.MAX_SAFE_INTEGER
+      return leftOrder - rightOrder || left.work_item_id - right.work_item_id
+    })
+    .map((workItem) => {
+      const breadcrumb = buildAncestorTrail({ workItem, workItems: params.allWorkItems })
+      return {
+        workItem,
+        depth: Math.max(0, breadcrumb.length - 1),
+        parentTrail: breadcrumb.slice(0, -1),
+        descendantCount: collectDescendantWorkItems(params.childrenByParent, workItem.work_item_id).length,
+      }
+    })
 }
 
 function buildHomeMapVisibleIds(params: {
@@ -1024,6 +1089,7 @@ export function DcxAdminTrackerPage(props: Props) {
   )
   const childrenByParent = useMemo(() => buildChildrenByParent(viewWorkItems), [viewWorkItems])
   const activeChildrenByParent = useMemo(() => buildChildrenByParent(activeWorkItems), [activeWorkItems])
+  const activeTreeOrderById = useMemo(() => buildWorkItemTreeOrder(activeChildrenByParent), [activeChildrenByParent])
   const parentOptionRows = useMemo(
     () => buildParentOptionRows({ childrenByParent: activeChildrenByParent, excludedWorkItemIds: new Set() }),
     [activeChildrenByParent],
@@ -1106,12 +1172,21 @@ export function DcxAdminTrackerPage(props: Props) {
   )
   const trackerPersonGroups = useMemo(
     () =>
-      assignableUsers.map((user) => ({
-        user,
-        workItems: activeWorkItems.filter((workItem) => workItem.assigned_to_user_id === user.user_id),
-        updates: visibleUpdates.filter((update) => update.author_user_id === user.user_id),
-      })),
-    [assignableUsers, activeWorkItems, visibleUpdates],
+      assignableUsers.map((user) => {
+        const assignedWorkItems = activeWorkItems.filter((workItem) => workItem.assigned_to_user_id === user.user_id)
+        return {
+          user,
+          workItems: assignedWorkItems,
+          workItemRows: buildTeamWorkItemRows({
+            assignedWorkItems,
+            allWorkItems: activeWorkItems,
+            childrenByParent: activeChildrenByParent,
+            treeOrderById: activeTreeOrderById,
+          }),
+          updates: visibleUpdates.filter((update) => update.author_user_id === user.user_id),
+        }
+      }),
+    [assignableUsers, activeWorkItems, activeChildrenByParent, activeTreeOrderById, visibleUpdates],
   )
   const trackerViewTitle = readTrackerViewTitle(props.routeView)
   const visibleWorkItemCount =
@@ -1178,6 +1253,22 @@ export function DcxAdminTrackerPage(props: Props) {
     setUpdateWorkItemId(parent?.work_item_id ?? updateWorkItemId)
     setSelectedPanelMode("edit")
     setDraft(buildBlankTrackerDraft(parent))
+  }
+
+  function startNewWorkItemFromGlobalComposer(): void {
+    const parent = activeWorkItems.find((workItem) => workItem.work_item_id === updateWorkItemId) ?? null
+    const composerText = updateBody.trim()
+    const nextDraft = buildBlankTrackerDraft(parent)
+    setEditingUpdateDraft(null)
+    setIsCreating(true)
+    setSelectedWorkItemId(parent?.work_item_id ?? null)
+    setUpdateWorkItemId(parent?.work_item_id ?? updateWorkItemId)
+    setSelectedPanelMode("edit")
+    setDraft({
+      ...nextDraft,
+      title: composerText ? readDraftTitleFromComposerText(composerText) : nextDraft.title,
+      description: composerText,
+    })
   }
 
   function startNewWorkItemFromEditingUpdate(): void {
@@ -1260,7 +1351,7 @@ export function DcxAdminTrackerPage(props: Props) {
                 className="min-h-24 rounded-md"
                 aria-label="Activity update"
               />
-              <div className="grid gap-3 md:grid-cols-[11rem_minmax(16rem,1fr)_auto] md:items-center">
+              <div className="grid gap-3 md:grid-cols-[11rem_minmax(16rem,1fr)_auto_auto] md:items-center">
                 <DcxAdminTrackerUpdateKindSelect
                   value={updateKind}
                   onValueChange={setUpdateKind}
@@ -1291,6 +1382,15 @@ export function DcxAdminTrackerPage(props: Props) {
                 >
                   <MessageSquarePlusIcon className="size-4" />
                   {createUpdateMutation.isPending ? "Adding..." : "Add update"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-md whitespace-nowrap"
+                  onClick={startNewWorkItemFromGlobalComposer}
+                >
+                  <PlusIcon className="size-4" />
+                  Create level
                 </Button>
               </div>
             </div>
@@ -1448,20 +1548,48 @@ export function DcxAdminTrackerPage(props: Props) {
                             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Levels</p>
                             {personGroup.workItems.length > 0 ? (
                               <div className="space-y-1.5">
-                                {personGroup.workItems.map((workItem) => (
-                                  <button
-                                    key={workItem.work_item_id}
-                                    type="button"
-                                    className="flex w-full items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
-                                    onClick={() => selectWorkItem(workItem)}
-                                  >
-                                    <span className="min-w-0">
-                                      <DcxAdminTrackerLevelBadge level={workItem.level} />
-                                      <span className="block truncate text-sm font-medium text-slate-900">{workItem.title}</span>
-                                    </span>
-                                    <DcxAdminTrackerStatusBadge status={workItem.status} />
-                                  </button>
-                                ))}
+                                {personGroup.workItemRows.map((workItemRow) => {
+                                  const hierarchyMeta = [
+                                    workItemRow.parentTrail.length > 0
+                                      ? `Belongs to: ${workItemRow.parentTrail.map((parentWorkItem) => parentWorkItem.title).join(" > ")}`
+                                      : null,
+                                    workItemRow.descendantCount > 0
+                                      ? `Contains ${readPluralizedCount(workItemRow.descendantCount, "level")}`
+                                      : null,
+                                  ].filter(Boolean).join(" | ")
+
+                                  return (
+                                    <button
+                                      key={workItemRow.workItem.work_item_id}
+                                      type="button"
+                                      className="flex w-full items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                                      onClick={() => selectWorkItem(workItemRow.workItem)}
+                                    >
+                                      <span
+                                        className="flex min-w-0 flex-1 items-start gap-2"
+                                        style={{ paddingLeft: `${Math.min(workItemRow.depth, 4) * 1.25}rem` }}
+                                      >
+                                        {workItemRow.depth > 0 ? (
+                                          <span className="mt-5 text-xs font-semibold text-slate-300">&gt;</span>
+                                        ) : null}
+                                        <span className="min-w-0">
+                                          <DcxAdminTrackerLevelBadge level={workItemRow.workItem.level} />
+                                          <span className="block truncate text-sm font-medium text-slate-900">
+                                            {workItemRow.workItem.title}
+                                          </span>
+                                          {hierarchyMeta ? (
+                                            <span className="mt-0.5 block truncate text-xs text-slate-400">
+                                              {hierarchyMeta}
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      </span>
+                                      <span className="shrink-0">
+                                        <DcxAdminTrackerStatusBadge status={workItemRow.workItem.status} />
+                                      </span>
+                                    </button>
+                                  )
+                                })}
                               </div>
                             ) : (
                               <p className="text-sm text-slate-500">No assigned levels.</p>
