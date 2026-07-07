@@ -1246,6 +1246,21 @@ export function DcxAdminTrackerPage(props: Props) {
     setSelectedPanelMode("read")
   }
 
+  function toggleTeamWorkItem(workItem: DcxAdminTrackerWorkItem): void {
+    const isSameOpenWorkItem =
+      selectedWorkItemId === workItem.work_item_id &&
+      !isCreating &&
+      editingUpdateDraft === null &&
+      teamVisibleWorkItemIds.has(workItem.work_item_id)
+
+    if (isSameOpenWorkItem) {
+      hideSelectedWorkItemPanel()
+      return
+    }
+
+    selectWorkItem(workItem)
+  }
+
   function openWorkItemById(workItemId: number): void {
     const workItem = workItems.find((candidate) => candidate.work_item_id === workItemId)
     if (workItem) {
@@ -1466,7 +1481,7 @@ export function DcxAdminTrackerPage(props: Props) {
     )
   }
 
-  function renderSelectedWorkItemDetailPanel(options: { inline?: boolean; showHideButton?: boolean } = {}) {
+  function renderSelectedWorkItemDetailPanel(options: { inline?: boolean } = {}) {
     if (!selectedWorkItem) {
       return null
     }
@@ -1474,18 +1489,6 @@ export function DcxAdminTrackerPage(props: Props) {
     const workItem = selectedWorkItem
     const actionButtons = (
       <div className="flex shrink-0 flex-wrap gap-2">
-        {options.showHideButton ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="rounded-md"
-            onClick={hideSelectedWorkItemPanel}
-          >
-            <XIcon className="size-3.5" />
-            Hide
-          </Button>
-        ) : null}
         {workItem.is_archived ? (
           <Button
             type="button"
@@ -1906,7 +1909,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                           isInlineSelectedWorkItem ? "border-slate-400 bg-slate-50" : "border-slate-200",
                                         )}
                                         aria-expanded={isInlineSelectedWorkItem}
-                                        onClick={() => selectWorkItem(workItemRow.workItem)}
+                                        onClick={() => toggleTeamWorkItem(workItemRow.workItem)}
                                       >
                                         <span
                                           className="flex min-w-0 flex-1 items-start gap-2"
@@ -1935,7 +1938,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                         >
                                           {selectedPanelMode === "edit"
                                             ? renderWorkItemEditorPanel({ inline: true })
-                                            : renderSelectedWorkItemDetailPanel({ inline: true, showHideButton: true })}
+                                            : renderSelectedWorkItemDetailPanel({ inline: true })}
                                         </div>
                                       ) : null}
                                     </div>
