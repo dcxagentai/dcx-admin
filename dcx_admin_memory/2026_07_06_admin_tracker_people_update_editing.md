@@ -26,7 +26,9 @@ Added the second tracker polish pass on 2026-07-06:
 - Tracker comboboxes disable query filtering for fixed option lists so all options remain visible after selecting one, and use tighter dropdown row padding.
 - Level badge colors use a grey ramp from near-black `#111827` through `#374151`, `#6b7280`, `#d1d5db`, to very light `#f8fafc`.
 - The top update composer has a `Create level` action. It uses the selected level as parent context when present and seeds the new level title/description from composer text when present.
-- The Team view renders assigned levels in hierarchy order with indentation, a small nested marker, parent breadcrumb text, and descendant counts where relevant.
+- The Team view renders assigned levels in hierarchy order with indentation and a small nested marker; row text only keeps descendant counts where relevant.
+- Clicking a Team level opens its detail/edit panel inline below that row, with a Hide/Cancel affordance, instead of opening the right-side panel.
+- Level rows now place the level chip and title on the same line for denser scanning, including the Team list and regular tracker level cards.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
 - Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.

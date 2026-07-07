@@ -760,8 +760,11 @@ function DcxAdminTrackerWorkCard(props: {
         className={cn("min-w-0 flex-1 text-left", props.compact ? "px-3 py-2.5" : "px-4 py-3")}
         onClick={() => props.onSelectWorkItem(props.workItem)}
       >
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <DcxAdminTrackerLevelBadge level={props.workItem.level} />
+          <span className="min-w-0 flex-[1_1_16rem] break-words text-sm font-semibold text-slate-950">
+            {props.workItem.title}
+          </span>
           <span className="text-xs text-slate-400">
             {readTrackerPillarLabels(readTrackerPillarsForWorkItem(props.workItem))}
           </span>
@@ -778,7 +781,6 @@ function DcxAdminTrackerWorkCard(props: {
           ) : null}
           <span className="text-xs text-slate-400">{props.workItem.update_count}</span>
         </div>
-        <p className="mt-1 break-words text-sm font-semibold text-slate-950">{props.workItem.title}</p>
         {!props.compact && props.workItem.description ? (
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{props.workItem.description}</p>
         ) : null}
@@ -1188,6 +1190,15 @@ export function DcxAdminTrackerPage(props: Props) {
       }),
     [assignableUsers, activeWorkItems, activeChildrenByParent, activeTreeOrderById, visibleUpdates],
   )
+  const teamVisibleWorkItemIds = useMemo(
+    () =>
+      new Set(
+        trackerPersonGroups.flatMap((personGroup) =>
+          personGroup.workItemRows.map((workItemRow) => workItemRow.workItem.work_item_id),
+        ),
+      ),
+    [trackerPersonGroups],
+  )
   const trackerViewTitle = readTrackerViewTitle(props.routeView)
   const visibleWorkItemCount =
     props.routeView === "all"
@@ -1207,7 +1218,12 @@ export function DcxAdminTrackerPage(props: Props) {
           : props.routeView === "archived"
             ? archivedWorkItems.length
             : activeWorkItems.filter((workItem) => workItem.level === props.routeView).length
-  const hasTrackerSidePanel = editingUpdateDraft !== null || isCreating || selectedWorkItem !== null
+  const isTeamInlineWorkItemPanel =
+    props.routeView === "team" &&
+    selectedWorkItem !== null &&
+    !isCreating &&
+    teamVisibleWorkItemIds.has(selectedWorkItem.work_item_id)
+  const hasTrackerSidePanel = editingUpdateDraft !== null || isCreating || (selectedWorkItem !== null && !isTeamInlineWorkItemPanel)
 
   useEffect(() => {
     if (!selectedWorkItem || isCreating) {
@@ -1306,6 +1322,13 @@ export function DcxAdminTrackerPage(props: Props) {
     setDraft(selectedWorkItem ? buildTrackerDraftFromWorkItem(selectedWorkItem) : buildBlankTrackerDraft())
   }
 
+  function hideSelectedWorkItemPanel(): void {
+    setSelectedWorkItemId(null)
+    setSelectedPanelMode("read")
+    setIsCreating(false)
+    setDraft(buildBlankTrackerDraft())
+  }
+
   function toggleDraftPillar(pillar: DcxAdminTrackerPillar): void {
     setDraft((currentDraft) => {
       const hasPillar = currentDraft.pillars.includes(pillar)
@@ -1319,6 +1342,311 @@ export function DcxAdminTrackerPage(props: Props) {
           : [...currentDraft.pillars, pillar],
       }
     })
+  }
+
+  function renderWorkItemEditorPanel(options: { inline?: boolean } = {}) {
+    return (
+      <section
+        className={cn(
+          "border border-black/6 bg-white",
+          options.inline ? "shadow-none" : "shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
+        )}
+      >
+        <div className="flex flex-col gap-3 border-b border-black/6 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-semibold tracking-tight text-slate-950">
+            {isCreating ? "New level" : "Edit level"}
+          </h3>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-md"
+            onClick={cancelWorkItemEditor}
+          >
+            Cancel
+          </Button>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="dcx-admin-tracker-title">
+              Title
+            </label>
+            <Input
+              id="dcx-admin-tracker-title"
+              value={draft.title}
+              onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, title: event.target.value }))}
+              placeholder="Meta WhatsApp Business Verification"
+              className="rounded-md"
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Level</label>
+              <DcxAdminTrackerLevelCombobox
+                value={draft.level}
+                ariaLabel="Level"
+                onValueChange={(level) => setDraft((currentDraft) => ({ ...currentDraft, level }))}
+              />
+            </div>
+            <TrackerPillarMultiSelect selectedPillars={draft.pillars} onTogglePillar={toggleDraftPillar} />
+            <TrackerSelect
+              label="Status"
+              value={draft.status}
+              options={trackerStatusOptions}
+              onValueChange={(value) =>
+                setDraft((currentDraft) => ({ ...currentDraft, status: value as DcxAdminTrackerStatus }))
+              }
+            />
+            <TrackerAssigneeSelect
+              assignableUsers={assignableUsers}
+              assignedToUserId={draft.assignedToUserId}
+              onValueChange={(assignedToUserId) => setDraft((currentDraft) => ({ ...currentDraft, assignedToUserId }))}
+            />
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Parent</label>
+              <Select
+                value={draft.parentWorkItemId === null ? "none" : String(draft.parentWorkItemId)}
+                onValueChange={(value) =>
+                  setDraft((currentDraft) => ({
+                    ...currentDraft,
+                    parentWorkItemId: value === "none" ? null : Number(value),
+                  }))
+                }
+              >
+                <SelectTrigger className="h-10 w-full rounded-md">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No parent</SelectItem>
+                  {editableParentOptionRows.map(({ workItem, depth }) => (
+                    <SelectItem key={workItem.work_item_id} value={String(workItem.work_item_id)}>
+                      {"-- ".repeat(depth)}
+                      {readTrackerLevelLabel(workItem.level)} - {workItem.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="dcx-admin-tracker-description">
+              Description
+            </label>
+            <Textarea
+              id="dcx-admin-tracker-description"
+              value={draft.description}
+              onChange={(event) => setDraft((currentDraft) => ({ ...currentDraft, description: event.target.value }))}
+              placeholder="What this exists to achieve."
+              className="min-h-24 rounded-md"
+            />
+          </div>
+
+          {saveWorkItemMutation.isError ? (
+            <p className="text-sm text-red-700">
+              {(saveWorkItemMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                (saveWorkItemMutation.error as Error).message}
+            </p>
+          ) : null}
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              className="rounded-md"
+              disabled={saveWorkItemMutation.isPending || draft.title.trim() === "" || draft.pillars.length === 0}
+              onClick={() => saveWorkItemMutation.mutate()}
+            >
+              <SaveIcon className="size-4" />
+              {saveWorkItemMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  function renderSelectedWorkItemDetailPanel(options: { inline?: boolean; showHideButton?: boolean } = {}) {
+    if (!selectedWorkItem) {
+      return null
+    }
+
+    const workItem = selectedWorkItem
+
+    return (
+      <section
+        className={cn(
+          "border border-black/6 bg-white",
+          options.inline ? "shadow-none" : "shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
+        )}
+      >
+        <div className="space-y-4 border-b border-black/6 px-6 py-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <DcxAdminTrackerLevelBadge level={workItem.level} />
+                <h3 className="min-w-0 break-words text-xl font-semibold tracking-tight text-slate-950">
+                  {workItem.title}
+                </h3>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-slate-400">
+                  {readTrackerPillarLabels(readTrackerPillarsForWorkItem(workItem))}
+                </span>
+                <DcxAdminTrackerStatusBadge status={workItem.status} />
+                {workItem.is_archived ? (
+                  <span className="inline-flex items-center border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    Archived
+                  </span>
+                ) : null}
+                {workItem.assigned_to_email ? (
+                  <span className="text-xs font-medium text-slate-500">
+                    {readPersonDisplayName(workItem.assigned_to_display_name, workItem.assigned_to_email)}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {options.showHideButton ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md"
+                  onClick={hideSelectedWorkItemPanel}
+                >
+                  <XIcon className="size-3.5" />
+                  Hide
+                </Button>
+              ) : null}
+              {workItem.is_archived ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md"
+                  disabled={archiveWorkItemMutation.isPending}
+                  onClick={() => archiveSelectedWorkItem(false)}
+                >
+                  <RotateCcwIcon className="size-3.5" />
+                  Restore
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md"
+                  disabled={archiveWorkItemMutation.isPending}
+                  onClick={() => archiveSelectedWorkItem(true)}
+                >
+                  <ArchiveIcon className="size-3.5" />
+                  Archive
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-md"
+                onClick={() => {
+                  setSelectedPanelMode("edit")
+                  setDraft(buildTrackerDraftFromWorkItem(workItem))
+                }}
+              >
+                <EditIcon className="size-3.5" />
+                Edit
+              </Button>
+              {!workItem.is_archived ? (
+                <Button type="button" size="sm" className="rounded-md" onClick={() => startNewWorkItem(workItem)}>
+                  <PlusIcon className="size-3.5" />
+                  New child
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="space-y-6 px-6 py-5">
+          <section>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Description</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+              {workItem.description || "No description recorded."}
+            </p>
+          </section>
+
+          {archiveWorkItemMutation.isError ? (
+            <p className="text-sm text-red-700">
+              {(archiveWorkItemMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                (archiveWorkItemMutation.error as Error).message}
+            </p>
+          ) : null}
+
+          {workItem.origin_update_id ? (
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Origin update</p>
+              {selectedOriginUpdate ? (
+                <button
+                  type="button"
+                  className="mt-2 w-full border border-slate-200 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                  onClick={() => startEditingUpdate(selectedOriginUpdate)}
+                >
+                  <span className="flex flex-wrap items-center gap-2">
+                    <DcxAdminTrackerUpdateKindBadge updateKind={selectedOriginUpdate.update_kind} />
+                    <span className="text-xs text-slate-400">
+                      {readPersonDisplayName(selectedOriginUpdate.author_display_name, selectedOriginUpdate.author_email)}{" "}
+                      {formatTrackerTimestampLabel(selectedOriginUpdate.created_at_ts_ms)}
+                    </span>
+                  </span>
+                  <span className="mt-1 block line-clamp-2 text-sm leading-5 text-slate-800">
+                    {selectedOriginUpdate.update_body}
+                  </span>
+                </button>
+              ) : (
+                <p className="mt-2 text-sm text-slate-500">Origin update not loaded in this catalog window.</p>
+              )}
+            </section>
+          ) : null}
+
+          <DcxAdminTrackerRelationList
+            title="Belongs to"
+            workItems={selectedAncestors}
+            emptyText="This item has no parent context."
+            onSelectWorkItem={selectWorkItem}
+          />
+
+          {trackerLevelOptions.map((levelOption) => {
+            const matchingDescendants = selectedDescendants.filter((descendant) => descendant.level === levelOption.value)
+            if (matchingDescendants.length === 0) {
+              return null
+            }
+            return (
+              <DcxAdminTrackerRelationList
+                key={levelOption.value}
+                title={`Contains ${readTrackerLevelPluralLabel(levelOption.value)}`}
+                workItems={matchingDescendants}
+                emptyText=""
+                onSelectWorkItem={selectWorkItem}
+              />
+            )
+          })}
+
+          <section className="border border-slate-200">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h4 className="text-base font-semibold tracking-tight text-slate-950">Activity updates</h4>
+            </div>
+            <div>
+              {selectedUpdates.length > 0 ? (
+                selectedUpdates.map((update) => (
+                  <DcxAdminTrackerUpdateRow key={update.update_id} update={update} onEditUpdate={startEditingUpdate} />
+                ))
+              ) : (
+                <p className="px-4 py-6 text-sm text-slate-500">No updates recorded for this item yet.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      </section>
+    )
   }
 
   return (
@@ -1549,45 +1877,59 @@ export function DcxAdminTrackerPage(props: Props) {
                             {personGroup.workItems.length > 0 ? (
                               <div className="space-y-1.5">
                                 {personGroup.workItemRows.map((workItemRow) => {
-                                  const hierarchyMeta = [
-                                    workItemRow.parentTrail.length > 0
-                                      ? `Belongs to: ${workItemRow.parentTrail.map((parentWorkItem) => parentWorkItem.title).join(" > ")}`
-                                      : null,
+                                  const hierarchyMeta =
                                     workItemRow.descendantCount > 0
                                       ? `Contains ${readPluralizedCount(workItemRow.descendantCount, "level")}`
-                                      : null,
-                                  ].filter(Boolean).join(" | ")
+                                      : ""
+                                  const isInlineSelectedWorkItem =
+                                    editingUpdateDraft === null &&
+                                    !isCreating &&
+                                    selectedWorkItem?.work_item_id === workItemRow.workItem.work_item_id
 
                                   return (
-                                    <button
-                                      key={workItemRow.workItem.work_item_id}
-                                      type="button"
-                                      className="flex w-full items-center justify-between gap-3 border border-slate-200 px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
-                                      onClick={() => selectWorkItem(workItemRow.workItem)}
-                                    >
-                                      <span
-                                        className="flex min-w-0 flex-1 items-start gap-2"
-                                        style={{ paddingLeft: `${Math.min(workItemRow.depth, 4) * 1.25}rem` }}
+                                    <div key={workItemRow.workItem.work_item_id} className="space-y-2">
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "flex w-full items-center justify-between gap-3 border px-3 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50",
+                                          isInlineSelectedWorkItem ? "border-slate-400 bg-slate-50" : "border-slate-200",
+                                        )}
+                                        aria-expanded={isInlineSelectedWorkItem}
+                                        onClick={() => selectWorkItem(workItemRow.workItem)}
                                       >
-                                        {workItemRow.depth > 0 ? (
-                                          <span className="mt-5 text-xs font-semibold text-slate-300">&gt;</span>
-                                        ) : null}
-                                        <span className="min-w-0">
-                                          <DcxAdminTrackerLevelBadge level={workItemRow.workItem.level} />
-                                          <span className="block truncate text-sm font-medium text-slate-900">
-                                            {workItemRow.workItem.title}
-                                          </span>
-                                          {hierarchyMeta ? (
-                                            <span className="mt-0.5 block truncate text-xs text-slate-400">
-                                              {hierarchyMeta}
-                                            </span>
+                                        <span
+                                          className="flex min-w-0 flex-1 items-start gap-2"
+                                          style={{ paddingLeft: `${Math.min(workItemRow.depth, 4) * 1.25}rem` }}
+                                        >
+                                          {workItemRow.depth > 0 ? (
+                                            <span className="mt-1 text-xs font-semibold text-slate-300">&gt;</span>
                                           ) : null}
+                                          <span className="min-w-0">
+                                            <span className="flex min-w-0 items-center gap-2">
+                                              <DcxAdminTrackerLevelBadge level={workItemRow.workItem.level} />
+                                              <span className="min-w-0 truncate text-sm font-medium text-slate-900">
+                                                {workItemRow.workItem.title}
+                                              </span>
+                                            </span>
+                                            {hierarchyMeta ? (
+                                              <span className="mt-0.5 block truncate text-xs text-slate-400">
+                                                {hierarchyMeta}
+                                              </span>
+                                            ) : null}
+                                          </span>
                                         </span>
-                                      </span>
-                                      <span className="shrink-0">
-                                        <DcxAdminTrackerStatusBadge status={workItemRow.workItem.status} />
-                                      </span>
-                                    </button>
+                                        <span className="shrink-0">
+                                          <DcxAdminTrackerStatusBadge status={workItemRow.workItem.status} />
+                                        </span>
+                                      </button>
+                                      {isInlineSelectedWorkItem ? (
+                                        <div>
+                                          {selectedPanelMode === "edit"
+                                            ? renderWorkItemEditorPanel({ inline: true })
+                                            : renderSelectedWorkItemDetailPanel({ inline: true, showHideButton: true })}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   )
                                 })}
                               </div>
