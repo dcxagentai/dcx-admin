@@ -89,7 +89,7 @@ const trackerPillarOptions: Array<{ value: DcxAdminTrackerPillar; label: string 
 ]
 
 const trackerStatusOptions: Array<{ value: DcxAdminTrackerStatus; label: string }> = [
-  { value: "not_started", label: "Not started" },
+  { value: "not_started", label: "Future" },
   { value: "active", label: "In progress" },
   { value: "waiting", label: "Waiting" },
   { value: "done", label: "Done" },
@@ -130,21 +130,41 @@ function readTrackerUpdateKindLabel(updateKind: DcxAdminTrackerUpdateKind): stri
 
 function readTrackerUpdateKindClassName(updateKind: DcxAdminTrackerUpdateKind): string {
   if (updateKind === "progress") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700"
+    return "border-emerald-700 bg-emerald-600 text-white"
   }
   if (updateKind === "blocker") {
-    return "border-red-200 bg-red-50 text-red-700"
+    return "border-red-700 bg-red-600 text-white"
   }
   if (updateKind === "decision") {
-    return "border-violet-200 bg-violet-50 text-violet-700"
+    return "border-violet-700 bg-violet-600 text-white"
   }
   if (updateKind === "question") {
-    return "border-amber-200 bg-amber-50 text-amber-800"
+    return "border-amber-600 bg-amber-500 text-white"
   }
   if (updateKind === "action") {
-    return "border-sky-200 bg-sky-50 text-sky-700"
+    return "border-sky-700 bg-sky-600 text-white"
   }
-  return "border-slate-200 bg-slate-50 text-slate-600"
+  return "border-slate-700 bg-slate-600 text-white"
+}
+
+function readTrackerLevelClassName(level: DcxAdminTrackerLevel): string {
+  if (level === "long_term") {
+    return "border-slate-900 bg-slate-800 text-white"
+  }
+  if (level === "strategy") {
+    return "border-indigo-800 bg-indigo-700 text-white"
+  }
+  if (level === "operation") {
+    return "border-blue-800 bg-blue-700 text-white"
+  }
+  if (level === "battle") {
+    return "border-rose-800 bg-rose-700 text-white"
+  }
+  return "border-zinc-800 bg-zinc-700 text-white"
+}
+
+function readPluralizedCount(count: number, singularLabel: string, pluralLabel = `${singularLabel}s`): string {
+  return `${count} ${count === 1 ? singularLabel : pluralLabel}`
 }
 
 function readPersonDisplayName(displayNameOrEmail: string | null, fallbackEmail: string | null = null): string {
@@ -424,16 +444,29 @@ function buildHomeMapVisibleIds(params: {
 function DcxAdminTrackerStatusBadge(props: { status: DcxAdminTrackerStatus }) {
   const statusClassName =
     props.status === "done"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-emerald-700 bg-emerald-600 text-white"
       : props.status === "waiting"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
+        ? "border-amber-600 bg-amber-500 text-white"
         : props.status === "active"
-          ? "border-sky-200 bg-sky-50 text-sky-700"
-          : "border-slate-200 bg-slate-50 text-slate-600"
+          ? "border-sky-700 bg-sky-600 text-white"
+          : "border-slate-700 bg-slate-600 text-white"
 
   return (
     <span className={cn("inline-flex items-center border px-2 py-0.5 text-xs font-medium", statusClassName)}>
       {readTrackerStatusLabel(props.status)}
+    </span>
+  )
+}
+
+function DcxAdminTrackerLevelBadge(props: { level: DcxAdminTrackerLevel }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center border px-2 py-0.5 text-xs font-semibold uppercase",
+        readTrackerLevelClassName(props.level),
+      )}
+    >
+      {readTrackerLevelLabel(props.level)}
     </span>
   )
 }
@@ -552,9 +585,7 @@ function DcxAdminTrackerWorkCard(props: {
         onClick={() => props.onSelectWorkItem(props.workItem)}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            {readTrackerLevelLabel(props.workItem.level)}
-          </span>
+          <DcxAdminTrackerLevelBadge level={props.workItem.level} />
           <span className="text-xs text-slate-400">
             {readTrackerPillarLabels(readTrackerPillarsForWorkItem(props.workItem))}
           </span>
@@ -812,7 +843,7 @@ export function DcxAdminTrackerPage(props: Props) {
   const createUpdateMutation = useMutation({
     mutationFn: async () => {
       if (updateWorkItemId === null) {
-        throw new Error("Choose a tracker item before adding an update.")
+        throw new Error("Choose a level before adding an update.")
       }
       return createDcxAdminTrackerUpdate({
         apiBaseUrl: props.apiBaseUrl,
@@ -1128,11 +1159,11 @@ export function DcxAdminTrackerPage(props: Props) {
                   value={updateWorkItemId === null ? "none" : String(updateWorkItemId)}
                   onValueChange={(value) => setUpdateWorkItemId(value === "none" ? null : Number(value))}
                 >
-                  <SelectTrigger className="h-10 w-full rounded-md" aria-label="Update item">
+                  <SelectTrigger className="h-10 w-full rounded-md" aria-label="Update level">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Choose item</SelectItem>
+                    <SelectItem value="none">Choose level</SelectItem>
                     {parentOptionRows.map(({ workItem, depth }) => (
                       <SelectItem key={workItem.work_item_id} value={String(workItem.work_item_id)}>
                         {"-- ".repeat(depth)}
@@ -1192,7 +1223,7 @@ export function DcxAdminTrackerPage(props: Props) {
                         {props.routeView !== "archived" ? (
                           <Button type="button" size="sm" className="rounded-md" onClick={() => startNewWorkItem()}>
                             <PlusIcon className="size-3.5" />
-                            New item
+                            New level
                           </Button>
                         ) : null}
                       </div>
@@ -1264,7 +1295,7 @@ export function DcxAdminTrackerPage(props: Props) {
                         />
                       ))
                     ) : (
-                      <p className="px-2 py-8 text-sm text-slate-500">No tracker items match this view.</p>
+                      <p className="px-2 py-8 text-sm text-slate-500">No levels match this view.</p>
                     )}
                   </div>
                 </section>
@@ -1291,16 +1322,19 @@ export function DcxAdminTrackerPage(props: Props) {
                     {trackerPersonGroups.map((personGroup) => (
                       <section key={personGroup.user.user_id} className="border border-slate-200 bg-white">
                         <div className="border-b border-slate-100 px-4 py-3">
-                          <h4 className="text-base font-semibold tracking-tight text-slate-950">
-                            {readPersonDisplayName(personGroup.user.display_name, personGroup.user.primary_email)}
-                          </h4>
-                          <p className="mt-0.5 text-xs text-slate-400">
-                            {personGroup.workItems.length} tasks, {personGroup.updates.length} updates
-                          </p>
+                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                            <h4 className="text-base font-semibold tracking-tight text-slate-950">
+                              {readPersonDisplayName(personGroup.user.display_name, personGroup.user.primary_email)}
+                            </h4>
+                            <p className="text-xs text-slate-400">
+                              {readPluralizedCount(personGroup.workItems.length, "level")},{" "}
+                              {readPluralizedCount(personGroup.updates.length, "update")}
+                            </p>
+                          </div>
                         </div>
                         <div className="space-y-5 p-4">
                           <section>
-                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tasks</p>
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Levels</p>
                             {personGroup.workItems.length > 0 ? (
                               <div className="space-y-1.5">
                                 {personGroup.workItems.map((workItem) => (
@@ -1311,9 +1345,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                     onClick={() => selectWorkItem(workItem)}
                                   >
                                     <span className="min-w-0">
-                                      <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                        {readTrackerLevelLabel(workItem.level)}
-                                      </span>
+                                      <DcxAdminTrackerLevelBadge level={workItem.level} />
                                       <span className="block truncate text-sm font-medium text-slate-900">{workItem.title}</span>
                                     </span>
                                     <DcxAdminTrackerStatusBadge status={workItem.status} />
@@ -1321,7 +1353,7 @@ export function DcxAdminTrackerPage(props: Props) {
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-sm text-slate-500">No assigned tasks.</p>
+                              <p className="text-sm text-slate-500">No assigned levels.</p>
                             )}
                           </section>
                           <section>
@@ -1370,7 +1402,7 @@ export function DcxAdminTrackerPage(props: Props) {
                       </Button>
                       <Button type="button" size="sm" className="rounded-md" onClick={() => startNewWorkItem()}>
                         <PlusIcon className="size-3.5" />
-                        New item
+                        New level
                       </Button>
                     </div>
                   </div>
@@ -1442,7 +1474,7 @@ export function DcxAdminTrackerPage(props: Props) {
                           )
                         }
                       >
-                        <SelectTrigger className="h-10 w-full rounded-md" aria-label="Edited update item">
+                        <SelectTrigger className="h-10 w-full rounded-md" aria-label="Edited update level">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1474,7 +1506,7 @@ export function DcxAdminTrackerPage(props: Props) {
                     ) : null}
                     <section className="border-t border-slate-100 pt-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm font-semibold text-slate-950">Items from this update</p>
+                        <p className="text-sm font-semibold text-slate-950">Levels from this update</p>
                         <Button
                           type="button"
                           variant="outline"
@@ -1483,7 +1515,7 @@ export function DcxAdminTrackerPage(props: Props) {
                           onClick={startNewWorkItemFromEditingUpdate}
                         >
                           <PlusIcon className="size-3.5" />
-                          Create item
+                          Create level
                         </Button>
                       </div>
                       {workItemsFromEditingUpdate.length > 0 ? (
@@ -1496,9 +1528,7 @@ export function DcxAdminTrackerPage(props: Props) {
                               onClick={() => selectWorkItem(workItem)}
                             >
                               <span className="min-w-0">
-                                <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                                  {readTrackerLevelLabel(workItem.level)}
-                                </span>
+                                <DcxAdminTrackerLevelBadge level={workItem.level} />
                                 <span className="block truncate text-sm font-medium text-slate-900">{workItem.title}</span>
                               </span>
                               <DcxAdminTrackerStatusBadge status={workItem.status} />
@@ -1506,7 +1536,7 @@ export function DcxAdminTrackerPage(props: Props) {
                           ))}
                         </div>
                       ) : (
-                        <p className="mt-3 text-sm text-slate-500">No tracker items have been created from this update yet.</p>
+                        <p className="mt-3 text-sm text-slate-500">No levels have been created from this update yet.</p>
                       )}
                     </section>
                   </div>
@@ -1517,7 +1547,7 @@ export function DcxAdminTrackerPage(props: Props) {
                 <section className="border border-black/6 bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]">
                   <div className="flex flex-col gap-3 border-b border-black/6 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="text-lg font-semibold tracking-tight text-slate-950">
-                      {isCreating ? "New work item" : "Edit work item"}
+                      {isCreating ? "New level" : "Edit level"}
                     </h3>
                     <Button
                       type="button"
@@ -1637,9 +1667,7 @@ export function DcxAdminTrackerPage(props: Props) {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                            {readTrackerLevelLabel(selectedWorkItem.level)}
-                          </span>
+                          <DcxAdminTrackerLevelBadge level={selectedWorkItem.level} />
                           <span className="text-xs text-slate-400">
                             {readTrackerPillarLabels(readTrackerPillarsForWorkItem(selectedWorkItem))}
                           </span>
