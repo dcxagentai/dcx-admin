@@ -355,6 +355,22 @@ function formatTrackerTimestampLabel(timestampMs: number | null): string {
   }).format(new Date(timestampMs))
 }
 
+function readTrackerUpdateOriginLabel(update: DcxAdminTrackerUpdate): string {
+  const normalizedBody = update.update_body.trim().replace(/\s+/g, " ")
+  const bodySnippet =
+    normalizedBody.length > 64
+      ? `${normalizedBody.slice(0, 61).trim()}...`
+      : normalizedBody || "--/--"
+
+  return [
+    readTrackerUpdateKindLabel(update.update_kind),
+    readPersonDisplayName(update.author_display_name, update.author_email),
+    formatTrackerTimestampLabel(update.created_at_ts_ms),
+    update.work_item_title,
+    bodySnippet,
+  ].join(" - ")
+}
+
 function buildChildrenByParent(workItems: DcxAdminTrackerWorkItem[]) {
   const childrenByParent = new Map<number | null, DcxAdminTrackerWorkItem[]>()
   for (const item of workItems) {
@@ -1510,6 +1526,30 @@ export function DcxAdminTrackerPage(props: Props) {
                     <SelectItem key={workItem.work_item_id} value={String(workItem.work_item_id)}>
                       {"-- ".repeat(depth)}
                       {readTrackerLevelLabel(workItem.level)} - {workItem.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Origin</label>
+              <Select
+                value={draft.originUpdateId === null ? "none" : String(draft.originUpdateId)}
+                onValueChange={(value) =>
+                  setDraft((currentDraft) => ({
+                    ...currentDraft,
+                    originUpdateId: value === "none" ? null : Number(value),
+                  }))
+                }
+              >
+                <SelectTrigger className="h-10 w-full rounded-md" aria-label="Origin update">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No origin</SelectItem>
+                  {updates.map((update) => (
+                    <SelectItem key={update.update_id} value={String(update.update_id)}>
+                      {readTrackerUpdateOriginLabel(update)}
                     </SelectItem>
                   ))}
                 </SelectContent>
