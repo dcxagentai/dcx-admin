@@ -770,10 +770,16 @@ function DcxAdminTrackerUpdateRow(props: {
               key={originWorkItemRow.workItem.work_item_id}
               type="button"
               className="flex w-full min-w-0 items-center justify-between gap-3 border border-slate-200 bg-white px-2.5 py-1.5 text-left transition hover:border-slate-300 hover:bg-slate-50"
-              style={{ marginLeft: `${Math.min(originWorkItemRow.depth, 4) * 1.1}rem` }}
               onClick={() => props.onOpenOriginWorkItem?.(originWorkItemRow.workItem)}
             >
               <span className="flex min-w-0 items-center gap-2">
+                {originWorkItemRow.depth > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="shrink-0"
+                    style={{ width: `${Math.min(originWorkItemRow.depth, 4) * 1.1}rem` }}
+                  />
+                ) : null}
                 <span className="text-xs text-slate-300">&gt;</span>
                 <DcxAdminTrackerLevelBadge level={originWorkItemRow.workItem.level} />
                 <span className="min-w-0 truncate text-xs font-medium text-slate-800">
