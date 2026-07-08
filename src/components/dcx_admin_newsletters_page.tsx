@@ -23,6 +23,10 @@ import {
   type DcxAdminNewsletterDetail,
 } from "../lib/read_dcx_admin_newsletter_detail"
 import { createDcxAdminNewsletterDraft } from "../lib/create_dcx_admin_newsletter_draft"
+import {
+  hasDcxAdminAiTranslationActiveJobs,
+  readDcxAdminAiTranslationStatusLabel,
+} from "../lib/dcx_admin_ai_translation_job_status"
 import { enqueueDcxAdminAiTranslationJobs } from "../lib/enqueue_dcx_admin_ai_translation_jobs"
 import { readDcxAdminAiTranslationJobs } from "../lib/read_dcx_admin_ai_translation_jobs"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
@@ -88,16 +92,6 @@ type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs" | "sharehol
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
 const newsletterRecipientColumnHelper = createColumnHelper<DcxAdminNewsletterSendRecipientRow>()
-
-function readAiTranslationStatusLabel(jobs: Array<{ job_status: string }>): string {
-  const activeCount = jobs.filter((job) => ["queued", "processing"].includes(job.job_status)).length
-  const failedCount = jobs.filter((job) => job.job_status === "failed").length
-  const staleCount = jobs.filter((job) => job.job_status === "stale_source").length
-  if (activeCount > 0) return `${activeCount} AI translation job${activeCount === 1 ? "" : "s"} running`
-  if (failedCount > 0) return `${failedCount} AI translation job${failedCount === 1 ? "" : "s"} failed`
-  if (staleCount > 0) return `${staleCount} AI translation job${staleCount === 1 ? "" : "s"} needs re-run`
-  return "AI translations idle"
-}
 
 function readNewsletterSendHeading(sendStatus: string): string {
   if (sendStatus === "cancelled") {
@@ -778,7 +772,7 @@ export function DcxAdminNewslettersPage(props: Props) {
     enabled: Boolean(props.routeEmailKey),
     refetchInterval: (query) => {
       const jobs = query.state.data?.data.jobs ?? []
-      return jobs.some((job) => ["queued", "processing"].includes(job.job_status)) ? 2500 : false
+      return hasDcxAdminAiTranslationActiveJobs(jobs) ? 2500 : false
     },
   })
   const currentDetailData = detailQuery.data?.data ?? null
@@ -1414,7 +1408,7 @@ export function DcxAdminNewslettersPage(props: Props) {
               </div>
               {translationJobsQuery.data?.data.jobs.length ? (
                 <p className="text-right text-xs font-medium text-slate-500">
-                  {readAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
+                  {readDcxAdminAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
                 </p>
               ) : null}
               {detail.ai_translation?.is_stale ? (

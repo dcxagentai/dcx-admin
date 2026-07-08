@@ -171,7 +171,7 @@ export function DcxAdminUnifiedTranslationLanguageSelector(props: {
           languageCode: languageRow.language_code,
           languageNameNative: languageRow.language_name_native,
         }),
-        subtitle: `${languageRow.language_code.toUpperCase()} · create translation`,
+        subtitle: `${languageRow.language_code.toUpperCase()} - create translation`,
         searchLabel: `${languageRow.language_name_native} ${languageRow.language_code} create translation`,
         kind: "missing" as const,
       })) ?? []

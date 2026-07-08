@@ -17,6 +17,10 @@ import {
   readDcxAdminLiveEmailsCatalog,
   type DcxAdminEmailCatalogRow,
 } from "../lib/read_dcx_admin_live_emails_catalog"
+import {
+  hasDcxAdminAiTranslationActiveJobs,
+  readDcxAdminAiTranslationStatusLabel,
+} from "../lib/dcx_admin_ai_translation_job_status"
 import { enqueueDcxAdminAiTranslationJobs } from "../lib/enqueue_dcx_admin_ai_translation_jobs"
 import { readDcxAdminAiTranslationJobs } from "../lib/read_dcx_admin_ai_translation_jobs"
 import { createDcxAdminSequenceEmailDraft } from "../lib/create_dcx_admin_sequence_email_draft"
@@ -62,16 +66,6 @@ function formatTimestampLabel(timestampMs: number | null): string {
 
 function renderLanguageLabel(language: DcxAdminEmailCatalogRow["language"]): string {
   return `${language.language_name_native} (${language.language_code})`
-}
-
-function readAiTranslationStatusLabel(jobs: Array<{ job_status: string }>): string {
-  const activeCount = jobs.filter((job) => ["queued", "processing"].includes(job.job_status)).length
-  const failedCount = jobs.filter((job) => job.job_status === "failed").length
-  const staleCount = jobs.filter((job) => job.job_status === "stale_source").length
-  if (activeCount > 0) return `${activeCount} AI translation job${activeCount === 1 ? "" : "s"} running`
-  if (failedCount > 0) return `${failedCount} AI translation job${failedCount === 1 ? "" : "s"} failed`
-  if (staleCount > 0) return `${staleCount} AI translation job${staleCount === 1 ? "" : "s"} needs re-run`
-  return "AI translations idle"
 }
 
 function readManagedEmailPluralLabel(emailType: string): string {
@@ -433,7 +427,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
     enabled: Boolean(props.routeEmailKey),
     refetchInterval: (query) => {
       const jobs = query.state.data?.data.jobs ?? []
-      return jobs.some((job) => ["queued", "processing"].includes(job.job_status)) ? 2500 : false
+      return hasDcxAdminAiTranslationActiveJobs(jobs) ? 2500 : false
     },
   })
   const saveEmailMutation = useMutation({
@@ -871,7 +865,7 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
               </div>
               {translationJobsQuery.data?.data.jobs.length ? (
                 <p className="text-right text-xs font-medium text-slate-500">
-                  {readAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
+                  {readDcxAdminAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
                 </p>
               ) : null}
               {selectedLanguageRow.ai_translation?.is_stale ? (
