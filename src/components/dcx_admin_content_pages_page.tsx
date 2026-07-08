@@ -40,6 +40,7 @@ import {
 } from "../lib/dcx_admin_editable_field_visuals"
 import { saveDcxAdminContentPageLiveRow } from "../lib/save_dcx_admin_content_page_live_row"
 import { publishDcxAdminContentPageLiveRow } from "../lib/publish_dcx_admin_content_page_live_row"
+import { publishDcxAdminContentPageTranslatedDrafts } from "../lib/publish_dcx_admin_content_page_translated_drafts"
 import { archiveDcxAdminContentPageLiveRow } from "../lib/archive_dcx_admin_content_page_live_row"
 import { renderDcxBasicMarkdownToHtml } from "../lib/render_dcx_basic_markdown_to_html"
 import { DcxAdminUnifiedTranslationLanguageSelector } from "./dcx_admin_translation_language_controls"
@@ -379,7 +380,13 @@ function readDcxAdminContentLanguageSortOrder(languageCode: string): number {
 function DcxAdminContentPagePublicRouteLinksStrip(props: {
   detail: DcxAdminContentPageDetail
   publicSiteBaseUrl: string
+  onPublishTranslatedDrafts: () => void
+  isPublishTranslatedDraftsPending: boolean
+  isPublishTranslatedDraftsDisabled: boolean
 }) {
+  const translatedDraftCount = props.detail.translation_summary.existing_translations.filter(
+    (translation) => !translation.is_original && translation.publication_status === "draft",
+  ).length
   const existingRouteItems = props.detail.translation_summary.existing_translations.map((translation) => {
     const isPublished = translation.publication_status === "published"
     return {
@@ -409,35 +416,50 @@ function DcxAdminContentPagePublicRouteLinksStrip(props: {
   }
 
   return (
-    <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-      <span className="mr-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-        Public routes
-      </span>
-      <span className="leading-7">
-        {routeItems.map((routeItem, index) => (
-          <span key={routeItem.languageCode}>
-            {routeItem.href ? (
-              <a
-                href={routeItem.href}
-                target="_blank"
-                rel="noreferrer"
-                title={routeItem.routePath ?? undefined}
-                className="font-semibold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
-              >
-                {routeItem.languageCode}
-              </a>
-            ) : (
-              <span
-                title={routeItem.routePath ?? undefined}
-                className="font-medium text-slate-400"
-              >
-                {routeItem.languageCode} {routeItem.statusLabel}
-              </span>
-            )}
-            {index < routeItems.length - 1 ? <span className="text-slate-400">, </span> : null}
-          </span>
-        ))}
-      </span>
+    <div className="flex flex-col gap-3 border border-slate-200 bg-slate-50 px-4 py-3 text-sm md:flex-row md:items-start md:justify-between">
+      <div>
+        <span className="mr-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Public routes
+        </span>
+        <span className="leading-7">
+          {routeItems.map((routeItem, index) => (
+            <span key={routeItem.languageCode}>
+              {routeItem.href ? (
+                <a
+                  href={routeItem.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={routeItem.routePath ?? undefined}
+                  className="font-semibold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
+                >
+                  {routeItem.languageCode}
+                </a>
+              ) : (
+                <span
+                  title={routeItem.routePath ?? undefined}
+                  className="font-medium text-slate-400"
+                >
+                  {routeItem.languageCode} {routeItem.statusLabel}
+                </span>
+              )}
+              {index < routeItems.length - 1 ? <span className="text-slate-400">, </span> : null}
+            </span>
+          ))}
+        </span>
+      </div>
+      {translatedDraftCount > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={props.onPublishTranslatedDrafts}
+          disabled={props.isPublishTranslatedDraftsDisabled}
+          className="h-8 shrink-0 rounded-none border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-950"
+        >
+          {props.isPublishTranslatedDraftsPending
+            ? "Publishing..."
+            : `Publish ${translatedDraftCount} drafts`}
+        </Button>
+      ) : null}
     </div>
   )
 }
@@ -578,6 +600,22 @@ export function DcxAdminContentPagesPage(props: Props) {
         metaTitle: draft.meta_title,
         metaDescription: draft.meta_description,
         pageSlug: draft.page_slug,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dcx_admin_content_pages_catalog"] }),
+        queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_content_page_detail", props.routeLanguageCode, props.routePageKey],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["dcx_admin_public_site_publish_status"] }),
+      ])
+    },
+  })
+  const publishTranslatedDraftsMutation = useMutation({
+    mutationFn: async () =>
+      publishDcxAdminContentPageTranslatedDrafts({
+        apiBaseUrl: props.apiBaseUrl,
+        pageKey: props.routePageKey ?? "",
       }),
     onSuccess: async () => {
       await Promise.all([
@@ -731,6 +769,7 @@ export function DcxAdminContentPagesPage(props: Props) {
     createDraftMutation.isPending ||
     saveMutation.isPending ||
     publishMutation.isPending ||
+    publishTranslatedDraftsMutation.isPending ||
     archiveMutation.isPending ||
     aiTranslationMutation.isPending
 
@@ -1172,6 +1211,9 @@ export function DcxAdminContentPagesPage(props: Props) {
               <DcxAdminContentPagePublicRouteLinksStrip
                 detail={detail}
                 publicSiteBaseUrl={props.publicSiteBaseUrl}
+                onPublishTranslatedDrafts={() => publishTranslatedDraftsMutation.mutate()}
+                isPublishTranslatedDraftsPending={publishTranslatedDraftsMutation.isPending}
+                isPublishTranslatedDraftsDisabled={isAnyWritePending || isDirty}
               />
             ) : null}
           </div>
@@ -1194,6 +1236,12 @@ export function DcxAdminContentPagesPage(props: Props) {
               <p className="text-sm text-red-600">
                 {(aiTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
                   (aiTranslationMutation.error as Error).message}
+              </p>
+            ) : null}
+            {publishTranslatedDraftsMutation.isError ? (
+              <p className="text-sm text-red-600">
+                {(publishTranslatedDraftsMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (publishTranslatedDraftsMutation.error as Error).message}
               </p>
             ) : null}
 
