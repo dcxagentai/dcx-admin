@@ -37,6 +37,8 @@ Added the second tracker polish pass on 2026-07-06:
 - Update rows now lead their metadata with the colored update-kind label, then author name, date, level, and edit context, making the status/type signal easier to scan.
 - Inline level/update drawers now use tighter vertical spacing so repeated open/close review feels denser and less card-heavy.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.
-- Team person headers show the account `last_seen_at_ts_ms` as "Last login" beside the level/task/update counts.
+- Team person headers show account "Last active" beside the level/task/update counts. This is computed from shared auth session last-seen/issued timestamps, user activity events, and the older user-profile `last_seen_at_ts_ms` fallback.
+- Shared auth session reads now touch both `stephen_dcx_user_auth_sessions.last_seen_at_ts_ms` and `stephen_dcx_users.last_seen_at_ts_ms` at most every five minutes, so normal app/admin usage refreshes the activity signal.
+- Inline level drawers now call the item activity section `Updates`, use `--/--` for missing descriptions or item updates, and update rows render any levels/tasks created from that update in a slightly indented origin list.
 
 Backend support depends on the matching SQL migrations in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql` and `dcx_api/storage/dcx_admin_tracker_update_kinds_decision_meeting_2026_07_08.sql`.

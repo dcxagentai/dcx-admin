@@ -255,7 +255,7 @@ const dcxAdminDirectoryColumns: ColumnDef<DcxAdminUserListRow, any>[] = [
     id: "last_seen",
     header: ({ column }) => (
       <DcxAdminSortableHeader
-        title="Last seen"
+        title="Last active"
         canSort={column.getCanSort()}
         sortDirection={column.getIsSorted()}
         onToggleSort={() => column.toggleSorting(column.getIsSorted() === "asc")}
@@ -490,7 +490,7 @@ export function DcxAdminUsersListPage(props: Props) {
                               : columnId === "primary_phone_status"
                                 ? "Phone"
                                 : columnId === "last_seen"
-                                  ? "Last seen"
+                                  ? "Last active"
                                   : columnId === "total_tokens"
                                     ? "Tokens"
                                     : columnId === "activity_events"

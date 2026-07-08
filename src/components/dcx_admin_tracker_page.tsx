@@ -700,9 +700,11 @@ function DcxAdminTrackerLevelCombobox(props: {
 
 function DcxAdminTrackerUpdateRow(props: {
   update: DcxAdminTrackerUpdate
+  originWorkItemRows?: DcxAdminTrackerTeamWorkItemRow[]
   showWorkItemTitle?: boolean
   isSelected?: boolean
   onOpenWorkItem?: (workItemId: number) => void
+  onOpenOriginWorkItem?: (workItem: DcxAdminTrackerWorkItem) => void
   onEditUpdate: (update: DcxAdminTrackerUpdate) => void
 }) {
   const wasEdited =
@@ -752,6 +754,30 @@ function DcxAdminTrackerUpdateRow(props: {
         </Button>
       </div>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">{props.update.update_body}</p>
+      {props.originWorkItemRows && props.originWorkItemRows.length > 0 ? (
+        <div className="mt-2 ml-4 space-y-1 border-l border-slate-200 pl-3">
+          {props.originWorkItemRows.map((originWorkItemRow) => (
+            <button
+              key={originWorkItemRow.workItem.work_item_id}
+              type="button"
+              className="flex w-full min-w-0 items-center justify-between gap-3 border border-slate-200 bg-white px-2.5 py-1.5 text-left transition hover:border-slate-300 hover:bg-slate-50"
+              style={{ marginLeft: `${Math.min(originWorkItemRow.depth, 4) * 1.1}rem` }}
+              onClick={() => props.onOpenOriginWorkItem?.(originWorkItemRow.workItem)}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="text-xs text-slate-300">&gt;</span>
+                <DcxAdminTrackerLevelBadge level={originWorkItemRow.workItem.level} />
+                <span className="min-w-0 truncate text-xs font-medium text-slate-800">
+                  {originWorkItemRow.workItem.title}
+                </span>
+              </span>
+              <span className="shrink-0">
+                <DcxAdminTrackerStatusBadge status={originWorkItemRow.workItem.status} />
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1112,6 +1138,31 @@ export function DcxAdminTrackerPage(props: Props) {
   const childrenByParent = useMemo(() => buildChildrenByParent(viewWorkItems), [viewWorkItems])
   const activeChildrenByParent = useMemo(() => buildChildrenByParent(activeWorkItems), [activeWorkItems])
   const activeTreeOrderById = useMemo(() => buildWorkItemTreeOrder(activeChildrenByParent), [activeChildrenByParent])
+  const originWorkItemRowsByUpdateId = useMemo(() => {
+    const originWorkItemsByUpdateId = new Map<number, DcxAdminTrackerWorkItem[]>()
+    for (const workItem of activeWorkItems) {
+      if (workItem.origin_update_id === null) {
+        continue
+      }
+      const existingRows = originWorkItemsByUpdateId.get(workItem.origin_update_id) ?? []
+      existingRows.push(workItem)
+      originWorkItemsByUpdateId.set(workItem.origin_update_id, existingRows)
+    }
+
+    const nextOriginWorkItemRowsByUpdateId = new Map<number, DcxAdminTrackerTeamWorkItemRow[]>()
+    for (const [updateId, originWorkItems] of originWorkItemsByUpdateId.entries()) {
+      nextOriginWorkItemRowsByUpdateId.set(
+        updateId,
+        buildTeamWorkItemRows({
+          assignedWorkItems: originWorkItems,
+          allWorkItems: activeWorkItems,
+          childrenByParent: activeChildrenByParent,
+          treeOrderById: activeTreeOrderById,
+        }),
+      )
+    }
+    return nextOriginWorkItemRowsByUpdateId
+  }, [activeWorkItems, activeChildrenByParent, activeTreeOrderById])
   const parentOptionRows = useMemo(
     () => buildParentOptionRows({ childrenByParent: activeChildrenByParent, excludedWorkItemIds: new Set() }),
     [activeChildrenByParent],
@@ -1620,7 +1671,7 @@ export function DcxAdminTrackerPage(props: Props) {
           <section>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Description</p>
             <p className={cn("whitespace-pre-wrap text-sm leading-6 text-slate-800", options.inline ? "mt-1" : "mt-2")}>
-              {workItem.description || "No description recorded."}
+              {workItem.description || "--/--"}
             </p>
           </section>
 
@@ -1688,13 +1739,13 @@ export function DcxAdminTrackerPage(props: Props) {
 
           <section className="border border-slate-200">
             <div className="border-b border-slate-200 px-3 py-2">
-              <h4 className="text-base font-semibold tracking-tight text-slate-950">Activity updates</h4>
+              <h4 className="text-base font-semibold tracking-tight text-slate-950">Updates</h4>
             </div>
             <div>
               {selectedUpdates.length > 0 ? (
                 selectedUpdates.map((update) => renderUpdateRowWithInlinePanel(update))
               ) : (
-                <p className="px-3 py-4 text-sm text-slate-500">No updates recorded for this item yet.</p>
+                <p className="px-3 py-4 text-sm text-slate-500">--/--</p>
               )}
             </div>
           </section>
@@ -1869,14 +1920,20 @@ export function DcxAdminTrackerPage(props: Props) {
     options: { showWorkItemTitle?: boolean; onOpenWorkItem?: (workItemId: number) => void } = {},
   ) {
     const isEditingThisUpdate = editingUpdateDraft?.updateId === update.update_id
+    const originWorkItemRows = originWorkItemRowsByUpdateId.get(update.update_id) ?? []
+    const selectedOriginWorkItemRow = originWorkItemRows.find(
+      (workItemRow) => workItemRow.workItem.work_item_id === selectedWorkItemId,
+    )
 
     return (
       <div key={update.update_id} className="space-y-2">
         <DcxAdminTrackerUpdateRow
           update={update}
+          originWorkItemRows={originWorkItemRows}
           showWorkItemTitle={options.showWorkItemTitle}
           isSelected={isEditingThisUpdate}
           onOpenWorkItem={options.onOpenWorkItem}
+          onOpenOriginWorkItem={toggleWorkItem}
           onEditUpdate={(nextUpdate) => {
             if (editingUpdateDraft?.updateId === nextUpdate.update_id) {
               saveUpdateMutation.reset()
@@ -1887,6 +1944,9 @@ export function DcxAdminTrackerPage(props: Props) {
           }}
         />
         {isEditingThisUpdate ? renderUpdateEditorPanel({ inline: true }) : null}
+        {selectedOriginWorkItemRow && !isEditingThisUpdate
+          ? renderWorkItemInlinePanel(selectedOriginWorkItemRow.workItem, { indentRem: 1.5 })
+          : null}
       </div>
     )
   }
@@ -2112,7 +2172,7 @@ export function DcxAdminTrackerPage(props: Props) {
                               {readPluralizedCount(personGroup.updates.length, "update")}
                             </p>
                             <p className="text-xs text-slate-400">
-                              Last login: {formatTrackerTimestampLabel(personGroup.user.last_seen_at_ts_ms)}
+                              Last active: {formatTrackerTimestampLabel(personGroup.user.last_active_at_ts_ms)}
                             </p>
                           </div>
                         </div>
@@ -2602,7 +2662,7 @@ export function DcxAdminTrackerPage(props: Props) {
                     <section>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Description</p>
                       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
-                        {selectedWorkItem.description || "No description recorded."}
+                        {selectedWorkItem.description || "--/--"}
                       </p>
                     </section>
 
@@ -2669,7 +2729,7 @@ export function DcxAdminTrackerPage(props: Props) {
 
                     <section className="border border-slate-200">
                       <div className="border-b border-slate-200 px-4 py-3">
-                        <h4 className="text-base font-semibold tracking-tight text-slate-950">Activity updates</h4>
+                        <h4 className="text-base font-semibold tracking-tight text-slate-950">Updates</h4>
                       </div>
                       <div>
                         {selectedUpdates.length > 0 ? (
@@ -2677,11 +2737,13 @@ export function DcxAdminTrackerPage(props: Props) {
                             <DcxAdminTrackerUpdateRow
                               key={update.update_id}
                               update={update}
+                              originWorkItemRows={originWorkItemRowsByUpdateId.get(update.update_id) ?? []}
                               onEditUpdate={startEditingUpdate}
+                              onOpenOriginWorkItem={toggleWorkItem}
                             />
                           ))
                         ) : (
-                          <p className="px-4 py-6 text-sm text-slate-500">No updates recorded for this item yet.</p>
+                          <p className="px-4 py-6 text-sm text-slate-500">--/--</p>
                         )}
                       </div>
                     </section>

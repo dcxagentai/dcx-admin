@@ -69,7 +69,7 @@ export type DcxAdminTrackerAssignableUser = {
   user_role: string
   account_status: string
   is_tracker_team_member: boolean
-  last_seen_at_ts_ms: number | null
+  last_active_at_ts_ms: number | null
 }
 
 type SuccessResponse = {
