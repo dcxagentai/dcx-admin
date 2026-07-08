@@ -534,16 +534,13 @@ function buildHomeMapVisibleIds(params: {
 
   if (!hasFilters) {
     for (const workItem of params.workItems) {
-      if (workItem.level !== "task") {
-        visibleIds.add(workItem.work_item_id)
-      }
+      visibleIds.add(workItem.work_item_id)
     }
     return visibleIds
   }
 
   for (const workItem of params.workItems) {
     if (
-      workItem.level === "task" ||
       !readWorkItemMatchesTrackerFilters({
         workItem,
         searchValue: params.searchValue,
@@ -556,9 +553,7 @@ function buildHomeMapVisibleIds(params: {
 
     visibleIds.add(workItem.work_item_id)
     for (const descendant of collectDescendantWorkItems(params.childrenByParent, workItem.work_item_id)) {
-      if (descendant.level !== "task") {
-        visibleIds.add(descendant.work_item_id)
-      }
+      visibleIds.add(descendant.work_item_id)
     }
 
     let parentId = workItem.parent_work_item_id
@@ -567,9 +562,7 @@ function buildHomeMapVisibleIds(params: {
       if (!parentWorkItem) {
         break
       }
-      if (parentWorkItem.level !== "task") {
-        visibleIds.add(parentWorkItem.work_item_id)
-      }
+      visibleIds.add(parentWorkItem.work_item_id)
       parentId = parentWorkItem.parent_work_item_id
     }
   }
@@ -876,7 +869,7 @@ function DcxAdminTrackerMapBranch(props: {
   renderInlinePanel: (workItem: DcxAdminTrackerWorkItem) => ReactNode
 }) {
   const children = (props.childrenByParent.get(props.workItem.work_item_id) ?? []).filter(
-    (child) => child.level !== "task" && props.visibleIds.has(child.work_item_id),
+    (child) => props.visibleIds.has(child.work_item_id),
   )
 
   return (
@@ -1307,7 +1300,7 @@ export function DcxAdminTrackerPage(props: Props) {
           : filteredLevelWorkItems.length
   const totalViewItemCount =
     props.routeView === "all"
-      ? activeWorkItems.filter((workItem) => workItem.level !== "task").length
+      ? activeWorkItems.length
       : props.routeView === "updates"
         ? visibleUpdates.length
         : props.routeView === "team"
@@ -2087,7 +2080,7 @@ export function DcxAdminTrackerPage(props: Props) {
                   <div className="space-y-4 border-b border-black/6 px-6 py-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <h3 className="text-lg font-semibold tracking-tight text-slate-950">
-                        {props.routeView === "all" ? "Hierarchy" : trackerViewTitle}
+                        {props.routeView === "all" ? "Project Map" : trackerViewTitle}
                       </h3>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="mr-2 text-sm text-slate-500">
