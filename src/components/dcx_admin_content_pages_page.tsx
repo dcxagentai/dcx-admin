@@ -57,6 +57,7 @@ import { ArrowUpDownIcon, ChevronDownIcon } from "lucide-react"
 
 type Props = {
   apiBaseUrl: string
+  publicSiteBaseUrl: string
   routePageKey: string | null
   routeLanguageCode: string | null
   onOpenPage: (params: { pageKey: string; languageCode: string }) => void
@@ -64,6 +65,21 @@ type Props = {
 }
 
 const pageColumnHelper = createColumnHelper<DcxAdminContentPageCatalogRow>()
+const DCX_ADMIN_CORE_CONTENT_LANGUAGE_CODES = [
+  "en",
+  "es",
+  "fr",
+  "de",
+  "zh",
+  "hi",
+  "ur",
+  "vi",
+  "id",
+  "ar",
+  "tr",
+  "ru",
+  "pt",
+]
 
 function formatTimestampLabel(timestampMs: number | null): string {
   if (typeof timestampMs !== "number") {
@@ -349,6 +365,81 @@ function DcxAdminSortableHeader(props: {
 
 function renderLanguageLabel(language: DcxAdminContentPageCatalogRow["language"]): string {
   return `${language.language_name_native} (${language.language_code})`
+}
+
+function buildDcxAdminPublicRouteUrl(publicSiteBaseUrl: string, routePath: string): string {
+  return new URL(routePath, publicSiteBaseUrl).toString()
+}
+
+function readDcxAdminContentLanguageSortOrder(languageCode: string): number {
+  const coreLanguageIndex = DCX_ADMIN_CORE_CONTENT_LANGUAGE_CODES.indexOf(languageCode.toLowerCase())
+  return coreLanguageIndex >= 0 ? coreLanguageIndex : DCX_ADMIN_CORE_CONTENT_LANGUAGE_CODES.length
+}
+
+function DcxAdminContentPagePublicRouteLinksStrip(props: {
+  detail: DcxAdminContentPageDetail
+  publicSiteBaseUrl: string
+}) {
+  const existingRouteItems = props.detail.translation_summary.existing_translations.map((translation) => {
+    const isPublished = translation.publication_status === "published"
+    return {
+      sortOrder: readDcxAdminContentLanguageSortOrder(translation.language.language_code),
+      languageCode: translation.language.language_code.toUpperCase(),
+      statusLabel: translation.publication_status,
+      routePath: translation.public_route_path,
+      href:
+        isPublished && translation.public_route_path
+          ? buildDcxAdminPublicRouteUrl(props.publicSiteBaseUrl, translation.public_route_path)
+          : null,
+    }
+  })
+  const missingRouteItems = props.detail.translation_summary.missing_languages.map((language) => ({
+    sortOrder: readDcxAdminContentLanguageSortOrder(language.language_code),
+    languageCode: language.language_code.toUpperCase(),
+    statusLabel: "missing",
+    routePath: null,
+    href: null,
+  }))
+  const routeItems = [...existingRouteItems, ...missingRouteItems].sort(
+    (leftItem, rightItem) => leftItem.sortOrder - rightItem.sortOrder,
+  )
+
+  if (routeItems.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+      <span className="mr-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        Public routes
+      </span>
+      <span className="leading-7">
+        {routeItems.map((routeItem, index) => (
+          <span key={routeItem.languageCode}>
+            {routeItem.href ? (
+              <a
+                href={routeItem.href}
+                target="_blank"
+                rel="noreferrer"
+                title={routeItem.routePath ?? undefined}
+                className="font-semibold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline"
+              >
+                {routeItem.languageCode}
+              </a>
+            ) : (
+              <span
+                title={routeItem.routePath ?? undefined}
+                className="font-medium text-slate-400"
+              >
+                {routeItem.languageCode} {routeItem.statusLabel}
+              </span>
+            )}
+            {index < routeItems.length - 1 ? <span className="text-slate-400">, </span> : null}
+          </span>
+        ))}
+      </span>
+    </div>
+  )
 }
 
 function readCatalogColumnWidthClassName(columnId: string): string {
@@ -1076,6 +1167,12 @@ export function DcxAdminContentPagesPage(props: Props) {
                   isCreatePending={aiTranslationMutation.isPending}
                 />
               </div>
+            ) : null}
+            {detail ? (
+              <DcxAdminContentPagePublicRouteLinksStrip
+                detail={detail}
+                publicSiteBaseUrl={props.publicSiteBaseUrl}
+              />
             ) : null}
           </div>
         </div>

@@ -707,6 +707,19 @@ function readDcxAdminApiBaseUrl(): string {
   return "http://localhost:8000"
 }
 
+function readDcxPublicSiteBaseUrl(): string {
+  const configuredPublicSiteBaseUrl = import.meta.env.VITE_PUBLIC_SITE_BASE_URL?.trim()
+  if (configuredPublicSiteBaseUrl) {
+    return configuredPublicSiteBaseUrl
+  }
+
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:4321"
+  }
+
+  return "https://dcxagent.ai"
+}
+
 function readDcxAdminScreenTitle(activeScreen: DcxAdminScreen): string {
   if (activeScreen === "content_page_categories") {
     return "Categories"
@@ -762,6 +775,7 @@ function readDcxAdminScreenTitle(activeScreen: DcxAdminScreen): string {
 function App() {
   const queryClient = useQueryClient()
   const apiBaseUrl = readDcxAdminApiBaseUrl()
+  const publicSiteBaseUrl = readDcxPublicSiteBaseUrl()
   const configuredAppBaseUrl = import.meta.env.VITE_APP_BASE_URL?.trim()
   const appBaseUrl =
     configuredAppBaseUrl ||
@@ -1042,6 +1056,7 @@ function App() {
       {activeScreen === "content_pages" ? (
         <DcxAdminContentPagesPage
           apiBaseUrl={apiBaseUrl}
+          publicSiteBaseUrl={publicSiteBaseUrl}
           routeLanguageCode={routeLanguageCode}
           routePageKey={routePageKey}
           onOpenPage={(params) => navigateToPathname(buildPathnameForContentPage(params))}

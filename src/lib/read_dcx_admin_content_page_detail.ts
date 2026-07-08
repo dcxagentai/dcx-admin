@@ -49,6 +49,8 @@ export type DcxAdminContentPageDetail = {
       page_key: string
       page_title: string
       page_slug: string
+      category_slug: string | null
+      public_route_path: string | null
       publication_status: string
       is_original: boolean
       created_at_ts_ms: number
