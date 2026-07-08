@@ -32,9 +32,10 @@ Added the second tracker polish pass on 2026-07-06:
 - Team level rows no longer show descendant counts; the inline detail panel is visually attached to the row and only shows actions, description, and activity updates.
 - Team level rows toggle their inline detail panel open/closed on repeated clicks, so the detail drawer no longer carries a separate Hide button.
 - Level and update index screens now use the same inline drawer pattern for view/edit actions; the previous right-side tracker panel path is disabled.
-- Team now separates assigned non-task Levels from assigned Tasks. Tasks show their parent context path, with subtle `@Name` markers when a parent level belongs to another team member.
+- Team now separates assigned non-task Levels from assigned Tasks. Task rows stay compact, while opened task drawers show the parent context path with subtle `@Name` markers when a parent level belongs to another team member.
 - Added an `Archived` tracker view and item archive/restore controls. Archived items are removed from normal item/update lists.
-- Update rows now lead their metadata with author name, then date, then item/type/edit context to better match the future weekly email digest.
+- Update rows now lead their metadata with the colored update-kind label, then author name, date, level, and edit context, making the status/type signal easier to scan.
+- Inline level/update drawers now use tighter vertical spacing so repeated open/close review feels denser and less card-heavy.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.
 
 Backend support depends on the matching SQL migration in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql`.

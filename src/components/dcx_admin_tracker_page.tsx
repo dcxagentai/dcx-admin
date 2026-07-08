@@ -710,6 +710,7 @@ function DcxAdminTrackerUpdateRow(props: {
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <DcxAdminTrackerUpdateKindBadge updateKind={props.update.update_kind} />
           <span className="text-xs font-medium text-slate-500">
             {readPersonDisplayName(props.update.author_display_name, props.update.author_email)}
           </span>
@@ -725,7 +726,6 @@ function DcxAdminTrackerUpdateRow(props: {
           ) : props.showWorkItemTitle ? (
             <span className="text-xs font-medium text-slate-500">{props.update.work_item_title}</span>
           ) : null}
-          <DcxAdminTrackerUpdateKindBadge updateKind={props.update.update_kind} />
           {wasEdited ? (
             <span className="text-xs text-slate-400">
               Edited by {readPersonDisplayName(props.update.updated_by_display_name, props.update.updated_by_email)}
@@ -767,26 +767,28 @@ function DcxAdminTrackerWorkCard(props: {
         className={cn("min-w-0 flex-1 text-left", props.compact ? "px-3 py-2.5" : "px-4 py-3")}
         onClick={() => props.onSelectWorkItem(props.workItem)}
       >
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <DcxAdminTrackerLevelBadge level={props.workItem.level} />
-          <span className="min-w-0 flex-[1_1_16rem] break-words text-sm font-semibold text-slate-950">
-            {props.workItem.title}
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2">
+            <DcxAdminTrackerLevelBadge level={props.workItem.level} />
+            <span className="min-w-0 break-words text-sm font-semibold text-slate-950">{props.workItem.title}</span>
           </span>
-          <span className="text-xs text-slate-400">
-            {readTrackerPillarLabels(readTrackerPillarsForWorkItem(props.workItem))}
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="text-xs text-slate-400">
+              {readTrackerPillarLabels(readTrackerPillarsForWorkItem(props.workItem))}
+            </span>
+            {props.workItem.is_archived ? (
+              <span className="inline-flex items-center border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                Archived
+              </span>
+            ) : null}
+            {props.workItem.assigned_to_email ? (
+              <span className="text-xs font-medium text-slate-500">
+                {readPersonDisplayName(props.workItem.assigned_to_display_name, props.workItem.assigned_to_email)}
+              </span>
+            ) : null}
+            <span className="text-xs text-slate-400">{props.workItem.update_count}</span>
+            <DcxAdminTrackerStatusBadge status={props.workItem.status} />
           </span>
-          <DcxAdminTrackerStatusBadge status={props.workItem.status} />
-          {props.workItem.is_archived ? (
-            <span className="inline-flex items-center border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-              Archived
-            </span>
-          ) : null}
-          {props.workItem.assigned_to_email ? (
-            <span className="text-xs font-medium text-slate-500">
-              {readPersonDisplayName(props.workItem.assigned_to_display_name, props.workItem.assigned_to_email)}
-            </span>
-          ) : null}
-          <span className="text-xs text-slate-400">{props.workItem.update_count}</span>
         </div>
         {!props.compact && props.workItem.description ? (
           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{props.workItem.description}</p>
@@ -1373,7 +1375,12 @@ export function DcxAdminTrackerPage(props: Props) {
           options.inline ? "shadow-none" : "shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
         )}
       >
-        <div className="flex flex-col gap-3 border-b border-black/6 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className={cn(
+            "flex flex-col gap-3 border-b border-black/6 sm:flex-row sm:items-center sm:justify-between",
+            options.inline ? "px-4 py-3" : "px-6 py-5",
+          )}
+        >
           <h3 className="text-lg font-semibold tracking-tight text-slate-950">
             {isCreating ? "New level" : "Edit level"}
           </h3>
@@ -1387,7 +1394,7 @@ export function DcxAdminTrackerPage(props: Props) {
             Cancel
           </Button>
         </div>
-        <div className="space-y-4 px-6 py-5">
+        <div className={cn(options.inline ? "space-y-3 px-4 py-3" : "space-y-4 px-6 py-5")}>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700" htmlFor="dcx-admin-tracker-title">
               Title
@@ -1487,12 +1494,26 @@ export function DcxAdminTrackerPage(props: Props) {
     )
   }
 
-  function renderSelectedWorkItemDetailPanel(options: { inline?: boolean } = {}) {
+  function renderSelectedWorkItemDetailPanel(options: { inline?: boolean; contextPersonUserId?: number } = {}) {
     if (!selectedWorkItem) {
       return null
     }
 
     const workItem = selectedWorkItem
+    const taskContextLine =
+      workItem.level === "task" && selectedAncestors.length > 0
+        ? selectedAncestors
+            .map((parentWorkItem) => {
+              const parentOwnerName =
+                options.contextPersonUserId !== undefined &&
+                parentWorkItem.assigned_to_user_id !== null &&
+                parentWorkItem.assigned_to_user_id !== options.contextPersonUserId
+                  ? ` @${readPersonDisplayName(parentWorkItem.assigned_to_display_name, parentWorkItem.assigned_to_email)}`
+                  : ""
+              return `${parentWorkItem.title}${parentOwnerName}`
+            })
+            .join(" > ")
+        : ""
     const actionButtons = (
       <div className="flex shrink-0 flex-wrap gap-2">
         {workItem.is_archived ? (
@@ -1552,7 +1573,7 @@ export function DcxAdminTrackerPage(props: Props) {
         )}
       >
         {options.inline ? (
-          <div className="flex justify-end border-b border-slate-200/70 px-5 py-3">{actionButtons}</div>
+          <div className="flex justify-end border-b border-slate-200/70 px-4 py-2">{actionButtons}</div>
         ) : (
           <div className="space-y-4 border-b border-black/6 px-6 py-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1584,10 +1605,13 @@ export function DcxAdminTrackerPage(props: Props) {
             </div>
           </div>
         )}
-        <div className={cn("space-y-6", options.inline ? "px-5 py-4" : "px-6 py-5")}>
+        <div className={cn(options.inline ? "space-y-4 px-4 py-3" : "space-y-6 px-6 py-5")}>
+          {options.inline && taskContextLine ? (
+            <p className="truncate text-xs text-slate-400">{taskContextLine}</p>
+          ) : null}
           <section>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Description</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-800">
+            <p className={cn("whitespace-pre-wrap text-sm leading-6 text-slate-800", options.inline ? "mt-1" : "mt-2")}>
               {workItem.description || "No description recorded."}
             </p>
           </section>
@@ -1655,14 +1679,14 @@ export function DcxAdminTrackerPage(props: Props) {
           ) : null}
 
           <section className="border border-slate-200">
-            <div className="border-b border-slate-200 px-4 py-3">
+            <div className="border-b border-slate-200 px-3 py-2">
               <h4 className="text-base font-semibold tracking-tight text-slate-950">Activity updates</h4>
             </div>
             <div>
               {selectedUpdates.length > 0 ? (
                 selectedUpdates.map((update) => renderUpdateRowWithInlinePanel(update))
               ) : (
-                <p className="px-4 py-6 text-sm text-slate-500">No updates recorded for this item yet.</p>
+                <p className="px-3 py-4 text-sm text-slate-500">No updates recorded for this item yet.</p>
               )}
             </div>
           </section>
@@ -1704,7 +1728,12 @@ export function DcxAdminTrackerPage(props: Props) {
             : "bg-white shadow-[0_20px_60px_-48px_rgba(15,23,42,0.45)]",
         )}
       >
-        <div className="flex flex-col gap-3 border-b border-black/6 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          className={cn(
+            "flex flex-col gap-3 border-b border-black/6 sm:flex-row sm:items-center sm:justify-between",
+            options.inline ? "px-4 py-3" : "px-5 py-4",
+          )}
+        >
           <h3 className="text-base font-semibold tracking-tight text-slate-950">Edit update</h3>
           <Button
             type="button"
@@ -1719,7 +1748,7 @@ export function DcxAdminTrackerPage(props: Props) {
             Cancel
           </Button>
         </div>
-        <div className="space-y-3 px-5 py-4">
+        <div className={cn("space-y-3", options.inline ? "px-4 py-3" : "px-5 py-4")}>
           <Textarea
             value={editingUpdateDraft.updateBody}
             onChange={(event) =>
@@ -2141,19 +2170,6 @@ export function DcxAdminTrackerPage(props: Props) {
                                 {personGroup.taskRows.map((workItemRow) => {
                                   const isInlineSelectedWorkItem =
                                     selectedWorkItemId === workItemRow.workItem.work_item_id
-                                  const parentContext = workItemRow.parentTrail
-                                    .map((parentWorkItem) => {
-                                      const parentOwnerName =
-                                        parentWorkItem.assigned_to_user_id !== null &&
-                                        parentWorkItem.assigned_to_user_id !== personGroup.user.user_id
-                                          ? ` @${readPersonDisplayName(
-                                              parentWorkItem.assigned_to_display_name,
-                                              parentWorkItem.assigned_to_email,
-                                            )}`
-                                          : ""
-                                      return `${parentWorkItem.title}${parentOwnerName}`
-                                    })
-                                    .join(" > ")
 
                                   return (
                                     <div key={workItemRow.workItem.work_item_id} className="space-y-2">
@@ -2173,11 +2189,6 @@ export function DcxAdminTrackerPage(props: Props) {
                                               {workItemRow.workItem.title}
                                             </span>
                                           </span>
-                                          {parentContext ? (
-                                            <span className="mt-1 block truncate text-xs text-slate-400">
-                                              {parentContext}
-                                            </span>
-                                          ) : null}
                                         </span>
                                         <span className="shrink-0">
                                           <DcxAdminTrackerStatusBadge status={workItemRow.workItem.status} />
@@ -2187,7 +2198,10 @@ export function DcxAdminTrackerPage(props: Props) {
                                         <div className="min-w-0 pl-6">
                                           {isCreating || selectedPanelMode === "edit"
                                             ? renderWorkItemEditorPanel({ inline: true })
-                                            : renderSelectedWorkItemDetailPanel({ inline: true })}
+                                            : renderSelectedWorkItemDetailPanel({
+                                                inline: true,
+                                                contextPersonUserId: personGroup.user.user_id,
+                                              })}
                                         </div>
                                       ) : null}
                                     </div>
