@@ -786,6 +786,14 @@ function DcxAdminTrackerUpdateRow(props: {
                 <span className="min-w-0 truncate text-xs font-medium text-slate-800">
                   {originWorkItemRow.workItem.title}
                 </span>
+                {originWorkItemRow.workItem.assigned_to_email ? (
+                  <span className="shrink-0 text-xs font-medium text-slate-500">
+                    @{readPersonDisplayName(
+                      originWorkItemRow.workItem.assigned_to_display_name,
+                      originWorkItemRow.workItem.assigned_to_email,
+                    )}
+                  </span>
+                ) : null}
               </span>
               <span className="shrink-0">
                 <DcxAdminTrackerStatusBadge status={originWorkItemRow.workItem.status} />
@@ -2211,8 +2219,11 @@ export function DcxAdminTrackerPage(props: Props) {
                               {readPluralizedCount(personGroup.taskWorkItems.length, "task")},{" "}
                               {readPluralizedCount(personGroup.updates.length, "update")}
                             </p>
-                            <p className="text-xs text-slate-400">
-                              Last active: {formatTrackerTimestampLabel(personGroup.user.last_active_at_ts_ms)}
+                            <p className="flex flex-wrap items-center gap-1 text-xs text-slate-400">
+                              <span className="inline-flex items-center border border-amber-200 bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900">
+                                Last active:
+                              </span>
+                              <span>{formatTrackerTimestampLabel(personGroup.user.last_active_at_ts_ms)}</span>
                             </p>
                           </div>
                         </div>
