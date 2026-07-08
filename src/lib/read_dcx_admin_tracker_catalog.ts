@@ -7,7 +7,15 @@
 export type DcxAdminTrackerLevel = "long_term" | "strategy" | "operation" | "battle" | "task"
 export type DcxAdminTrackerPillar = "legibility" | "investors" | "building" | "customers" | "other"
 export type DcxAdminTrackerStatus = "not_started" | "active" | "waiting" | "done"
-export type DcxAdminTrackerUpdateKind = "note" | "progress" | "blocker" | "decision" | "question" | "action"
+export type DcxAdminTrackerUpdateKind =
+  | "note"
+  | "progress"
+  | "blocker"
+  | "decision"
+  | "question"
+  | "action"
+  | "concept"
+  | "meeting"
 
 export type DcxAdminTrackerWorkItem = {
   work_item_id: number
@@ -61,6 +69,7 @@ export type DcxAdminTrackerAssignableUser = {
   user_role: string
   account_status: string
   is_tracker_team_member: boolean
+  last_seen_at_ts_ms: number | null
 }
 
 type SuccessResponse = {

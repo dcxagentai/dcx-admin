@@ -123,7 +123,9 @@ const trackerUpdateKindOptions: DcxAdminTrackerUpdateKindOption[] = [
   { value: "progress", label: "Progress" },
   { value: "blocker", label: "Problem" },
   { value: "question", label: "Question" },
-  { value: "decision", label: "Concepts" },
+  { value: "decision", label: "Decision" },
+  { value: "meeting", label: "Meeting" },
+  { value: "concept", label: "Concepts" },
   { value: "note", label: "Other" },
 ]
 
@@ -175,6 +177,12 @@ function readTrackerUpdateKindPalette(updateKind: DcxAdminTrackerUpdateKind): Tr
     return { backgroundColor: "#fee2e2", borderColor: "#fca5a5", color: "#991b1b" }
   }
   if (updateKind === "decision") {
+    return { backgroundColor: "#dbeafe", borderColor: "#93c5fd", color: "#1d4ed8" }
+  }
+  if (updateKind === "meeting") {
+    return { backgroundColor: "#cffafe", borderColor: "#67e8f9", color: "#155e75" }
+  }
+  if (updateKind === "concept") {
     return { backgroundColor: "#ede9fe", borderColor: "#c4b5fd", color: "#5b21b6" }
   }
   if (updateKind === "question") {
@@ -2102,6 +2110,9 @@ export function DcxAdminTrackerPage(props: Props) {
                               {readPluralizedCount(personGroup.levelWorkItems.length, "level")},{" "}
                               {readPluralizedCount(personGroup.taskWorkItems.length, "task")},{" "}
                               {readPluralizedCount(personGroup.updates.length, "update")}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Last login: {formatTrackerTimestampLabel(personGroup.user.last_seen_at_ts_ms)}
                             </p>
                           </div>
                         </div>

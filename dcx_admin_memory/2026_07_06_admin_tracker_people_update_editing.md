@@ -13,14 +13,14 @@ Added the second tracker polish pass on 2026-07-06:
 - The edit-update save button was moved to its own row so it cannot overflow in the right panel.
 - Work item detail panels now show a clickable origin update when `origin_update_id` is present.
 - Renamed `Who` to `Team`, with `/tracker/team` as the canonical route and `/tracker/who` left as a compatibility alias.
-- Tracker menu order is Team, Updates, Long-term, Strategies, Operations, Challenges, Tasks, Archived.
+- Tracker menu order is Team, Updates, Tasks, Challenges, Operations, Strategies, Long-term, Archived.
 - Team uses `public_display_name` when available, falls back to email-derived names, and displays one vertical sequence per person: assigned levels first, then updates.
 - The user-facing tracker vocabulary now uses `Levels` for structured work rows and keeps `Updates` for activity notes. The stored work-item model remains unchanged.
 - `not_started` still stays as the stored status value, but the UI label is `Future`.
 - Status badges use stronger filled backgrounds with white text because they carry workflow state.
 - Level badges use neutral monochrome labels so hierarchy stays visible without competing with status.
-- Update-kind badges use lighter colored chips with dark text. The user-facing categories are Progress, Problem, Question, Concepts, and Other; backend values still use the existing safe strings (`progress`, `blocker`, `question`, `decision`, `note`) for now.
-- Existing `action` updates are displayed as Other and are normalized to `note` if edited from the UI.
+- Update-kind badges use lighter colored chips with dark text. The user-facing categories are Progress, Problem, Question, Decision, Meeting, Concepts, and Other.
+- Stored update kinds now include `concept` and `meeting`; `decision` displays as Decision again. Existing legacy `action` updates are displayed as Other and are normalized to `note` if edited from the UI.
 - Tracker badge colors now use explicit hex palettes in `dcx_admin_tracker_page.tsx` rather than relying on Tailwind color utility shades.
 - The tracker update-kind and level selectors use the shared Base UI combobox trigger/value wrapper so rich badge chips render in both the trigger and dropdown rows.
 - Tracker comboboxes disable query filtering for fixed option lists so all options remain visible after selecting one, and use tighter dropdown row padding.
@@ -37,5 +37,6 @@ Added the second tracker polish pass on 2026-07-06:
 - Update rows now lead their metadata with the colored update-kind label, then author name, date, level, and edit context, making the status/type signal easier to scan.
 - Inline level/update drawers now use tighter vertical spacing so repeated open/close review feels denser and less card-heavy.
 - Users detail has a Tracker Team membership toggle backed by `is_tracker_team_member`.
+- Team person headers show the account `last_seen_at_ts_ms` as "Last login" beside the level/task/update counts.
 
-Backend support depends on the matching SQL migration in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql`.
+Backend support depends on the matching SQL migrations in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql` and `dcx_api/storage/dcx_admin_tracker_update_kinds_decision_meeting_2026_07_08.sql`.

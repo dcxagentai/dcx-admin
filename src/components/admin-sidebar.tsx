@@ -64,22 +64,10 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
           isActive: currentPathname === "/tracker/updates",
         },
         {
-          id: "tracker_long_term",
-          title: "Long-term",
-          url: "/tracker/long-term",
-          isActive: currentPathname === "/tracker/long-term",
-        },
-        {
-          id: "tracker_strategies",
-          title: "Strategies",
-          url: "/tracker/strategies",
-          isActive: currentPathname === "/tracker/strategies",
-        },
-        {
-          id: "tracker_operations",
-          title: "Operations",
-          url: "/tracker/operations",
-          isActive: currentPathname === "/tracker/operations",
+          id: "tracker_tasks",
+          title: "Tasks",
+          url: "/tracker/tasks",
+          isActive: currentPathname === "/tracker/tasks",
         },
         {
           id: "tracker_challenges",
@@ -88,10 +76,22 @@ function readAdminNavMainItems(currentPathname: string): AdminNavMainItem[] {
           isActive: currentPathname === "/tracker/challenges" || currentPathname === "/tracker/battles",
         },
         {
-          id: "tracker_tasks",
-          title: "Tasks",
-          url: "/tracker/tasks",
-          isActive: currentPathname === "/tracker/tasks",
+          id: "tracker_operations",
+          title: "Operations",
+          url: "/tracker/operations",
+          isActive: currentPathname === "/tracker/operations",
+        },
+        {
+          id: "tracker_strategies",
+          title: "Strategies",
+          url: "/tracker/strategies",
+          isActive: currentPathname === "/tracker/strategies",
+        },
+        {
+          id: "tracker_long_term",
+          title: "Long-term",
+          url: "/tracker/long-term",
+          isActive: currentPathname === "/tracker/long-term",
         },
         {
           id: "tracker_archived",
