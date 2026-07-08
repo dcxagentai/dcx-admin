@@ -51,6 +51,13 @@ export type DcxAdminEmailCatalogRow = {
     language_name_native: string
     is_rtl: boolean
   }
+  ai_translation: {
+    is_ai_translated: boolean
+    is_stale: boolean
+    job_id: number | null
+    source_row_id_snapshot: number | null
+    translated_at_ts_ms: number | null
+  }
 }
 
 type DcxAdminLiveEmailsCatalogSuccessResponse = {

@@ -17,7 +17,8 @@ import {
   readDcxAdminLiveEmailsCatalog,
   type DcxAdminEmailCatalogRow,
 } from "../lib/read_dcx_admin_live_emails_catalog"
-import { createDcxAdminEmailTranslation } from "../lib/create_dcx_admin_email_translation"
+import { enqueueDcxAdminAiTranslationJobs } from "../lib/enqueue_dcx_admin_ai_translation_jobs"
+import { readDcxAdminAiTranslationJobs } from "../lib/read_dcx_admin_ai_translation_jobs"
 import { createDcxAdminSequenceEmailDraft } from "../lib/create_dcx_admin_sequence_email_draft"
 import { readDcxAdminMissingLanguageRows } from "../lib/dcx_admin_language_flag_options"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
@@ -61,6 +62,16 @@ function formatTimestampLabel(timestampMs: number | null): string {
 
 function renderLanguageLabel(language: DcxAdminEmailCatalogRow["language"]): string {
   return `${language.language_name_native} (${language.language_code})`
+}
+
+function readAiTranslationStatusLabel(jobs: Array<{ job_status: string }>): string {
+  const activeCount = jobs.filter((job) => ["queued", "processing"].includes(job.job_status)).length
+  const failedCount = jobs.filter((job) => job.job_status === "failed").length
+  const staleCount = jobs.filter((job) => job.job_status === "stale_source").length
+  if (activeCount > 0) return `${activeCount} AI translation job${activeCount === 1 ? "" : "s"} running`
+  if (failedCount > 0) return `${failedCount} AI translation job${failedCount === 1 ? "" : "s"} failed`
+  if (staleCount > 0) return `${staleCount} AI translation job${staleCount === 1 ? "" : "s"} needs re-run`
+  return "AI translations idle"
 }
 
 function readManagedEmailPluralLabel(emailType: string): string {
@@ -411,6 +422,20 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         apiBaseUrl: props.apiBaseUrl,
       }),
   })
+  const translationJobsQuery = useQuery({
+    queryKey: ["dcx_admin_ai_translation_jobs", "email", props.routeEmailKey],
+    queryFn: async () =>
+      readDcxAdminAiTranslationJobs({
+        apiBaseUrl: props.apiBaseUrl,
+        entityKind: "email",
+        entityKey: props.routeEmailKey ?? "",
+      }),
+    enabled: Boolean(props.routeEmailKey),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.data.jobs ?? []
+      return jobs.some((job) => ["queued", "processing"].includes(job.job_status)) ? 2500 : false
+    },
+  })
   const saveEmailMutation = useMutation({
     mutationFn: async (params: {
       emailId: number
@@ -424,22 +449,30 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
         emailBody: params.emailBody,
       }),
   })
-  const createTranslationMutation = useMutation({
-    mutationFn: async (params: { targetLanguageCode: string }) =>
-      createDcxAdminEmailTranslation({
+  const aiTranslationMutation = useMutation({
+    mutationFn: async (params: { targetLanguageCodes?: string[] }) =>
+      enqueueDcxAdminAiTranslationJobs({
         apiBaseUrl: props.apiBaseUrl,
-        emailKey: props.routeEmailKey ?? "",
-        sourceLanguageCode: props.routeLanguageCode ?? "en",
-        targetLanguageCode: params.targetLanguageCode,
+        entityKind: "email",
+        entityKey: props.routeEmailKey ?? "",
+        sourceLanguageCode: originalRow?.language.language_code ?? props.routeLanguageCode ?? "en",
+        targetLanguageCodes: params.targetLanguageCodes,
       }),
-    onSuccess: async (payload) => {
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["dcx_admin_ai_translation_jobs", "email", props.routeEmailKey],
+      })
       await queryClient.invalidateQueries({
         queryKey: ["dcx_admin_live_emails_catalog"],
       })
-      props.onOpenEmail({
-        emailKey: payload.data.email_key,
-        languageCode: payload.data.language_code,
-      })
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_ai_translation_jobs", "email", props.routeEmailKey],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_live_emails_catalog"],
+        })
+      }, 3500)
     },
   })
   const createSequenceEmailDraftMutation = useMutation({
@@ -825,6 +858,27 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
               >
                 {selectedLanguageStatusText}
               </p>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-none border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:text-blue-900"
+                  disabled={aiTranslationMutation.isPending || saveEmailMutation.isPending}
+                  onClick={() => aiTranslationMutation.mutate({})}
+                >
+                  {aiTranslationMutation.isPending ? "Queueing..." : "Translate"}
+                </Button>
+              </div>
+              {translationJobsQuery.data?.data.jobs.length ? (
+                <p className="text-right text-xs font-medium text-slate-500">
+                  {readAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
+                </p>
+              ) : null}
+              {selectedLanguageRow.ai_translation?.is_stale ? (
+                <p className="text-right text-xs font-semibold text-amber-600">
+                  Original changed since this AI translation was generated. Press Translate again.
+                </p>
+              ) : null}
               <DcxAdminUnifiedTranslationLanguageSelector
                 existingLanguageRows={availableLanguageRows.map((row) => ({
                   language_code: row.language.language_code,
@@ -846,11 +900,11 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
                 }}
                 missingLanguages={missingLanguageRows}
                 onCreateMissingLanguage={(languageCode) => {
-                  createTranslationMutation.mutate({
-                    targetLanguageCode: languageCode,
+                  aiTranslationMutation.mutate({
+                    targetLanguageCodes: [languageCode],
                   })
                 }}
-                isCreatePending={createTranslationMutation.isPending}
+                isCreatePending={aiTranslationMutation.isPending}
               />
             </div>
           ) : null}
@@ -866,9 +920,9 @@ export function DcxAdminEmailsCatalogPage(props: Props) {
 
         {!catalogQuery.isLoading && !catalogQuery.isError && selectedLanguageRow ? (
           <div className="space-y-6">
-            {createTranslationMutation.isError ? (
+            {aiTranslationMutation.isError ? (
               <p className="text-sm text-red-600">
-                {(createTranslationMutation.error as Error & { suggested_action?: string })
+                {(aiTranslationMutation.error as Error & { suggested_action?: string })
                   .suggested_action ??
                   readManagedEmailTranslationErrorFallback(selectedType)}
               </p>

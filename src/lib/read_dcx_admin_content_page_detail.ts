@@ -7,6 +7,14 @@
  */
 import type { DcxAdminContentPageCategoryRow } from "./read_dcx_admin_content_page_categories_catalog"
 
+export type DcxAdminAiTranslationProvenance = {
+  is_ai_translated: boolean
+  is_stale: boolean
+  job_id: number | null
+  source_row_id_snapshot: number | null
+  translated_at_ts_ms: number | null
+}
+
 export type DcxAdminContentPageDetail = {
   page_id: number
   page_key: string
@@ -32,6 +40,7 @@ export type DcxAdminContentPageDetail = {
     category_description: string
     category_slug: string
   }
+  ai_translation: DcxAdminAiTranslationProvenance
   translation_summary: {
     original_page_id: number
     original_language_code: string
@@ -46,6 +55,7 @@ export type DcxAdminContentPageDetail = {
       updated_at_ts_ms: number
       is_current_language: boolean
       language: DcxAdminContentPageCategoryRow["language"]
+      ai_translation: DcxAdminAiTranslationProvenance
     }>
     missing_languages: DcxAdminContentPageCategoryRow["language"][]
   }

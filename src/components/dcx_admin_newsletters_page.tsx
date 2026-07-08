@@ -23,7 +23,8 @@ import {
   type DcxAdminNewsletterDetail,
 } from "../lib/read_dcx_admin_newsletter_detail"
 import { createDcxAdminNewsletterDraft } from "../lib/create_dcx_admin_newsletter_draft"
-import { createDcxAdminNewsletterTranslation } from "../lib/create_dcx_admin_newsletter_translation"
+import { enqueueDcxAdminAiTranslationJobs } from "../lib/enqueue_dcx_admin_ai_translation_jobs"
+import { readDcxAdminAiTranslationJobs } from "../lib/read_dcx_admin_ai_translation_jobs"
 import { saveDcxAdminLiveEmailRow } from "../lib/save_dcx_admin_live_email_row"
 import {
   readDcxAdminNewsletterSendsCatalog,
@@ -87,6 +88,16 @@ type DcxAdminNewsletterSendAudienceScope = "all" | "admins" | "devs" | "sharehol
 
 const newsletterColumnHelper = createColumnHelper<DcxAdminNewsletterCatalogRow>()
 const newsletterRecipientColumnHelper = createColumnHelper<DcxAdminNewsletterSendRecipientRow>()
+
+function readAiTranslationStatusLabel(jobs: Array<{ job_status: string }>): string {
+  const activeCount = jobs.filter((job) => ["queued", "processing"].includes(job.job_status)).length
+  const failedCount = jobs.filter((job) => job.job_status === "failed").length
+  const staleCount = jobs.filter((job) => job.job_status === "stale_source").length
+  if (activeCount > 0) return `${activeCount} AI translation job${activeCount === 1 ? "" : "s"} running`
+  if (failedCount > 0) return `${failedCount} AI translation job${failedCount === 1 ? "" : "s"} failed`
+  if (staleCount > 0) return `${staleCount} AI translation job${staleCount === 1 ? "" : "s"} needs re-run`
+  return "AI translations idle"
+}
 
 function readNewsletterSendHeading(sendStatus: string): string {
   if (sendStatus === "cancelled") {
@@ -753,8 +764,22 @@ export function DcxAdminNewslettersPage(props: Props) {
         emailKey: props.routeEmailKey ?? "",
         languageCode: props.routeLanguageCode ?? "en",
         sendAudienceScope,
-      }),
+    }),
     enabled: Boolean(props.routeEmailKey && props.routeLanguageCode),
+  })
+  const translationJobsQuery = useQuery({
+    queryKey: ["dcx_admin_ai_translation_jobs", "newsletter", props.routeEmailKey],
+    queryFn: async () =>
+      readDcxAdminAiTranslationJobs({
+        apiBaseUrl: props.apiBaseUrl,
+        entityKind: "newsletter",
+        entityKey: props.routeEmailKey ?? "",
+      }),
+    enabled: Boolean(props.routeEmailKey),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.data.jobs ?? []
+      return jobs.some((job) => ["queued", "processing"].includes(job.job_status)) ? 2500 : false
+    },
   })
   const currentDetailData = detailQuery.data?.data ?? null
   const originalTranslationRow =
@@ -835,16 +860,18 @@ export function DcxAdminNewslettersPage(props: Props) {
       ])
     },
   })
-  const createTranslationMutation = useMutation({
-    mutationFn: async (params: { targetLanguageCode: string }) =>
-      createDcxAdminNewsletterTranslation({
+  const aiTranslationMutation = useMutation({
+    mutationFn: async (params: { targetLanguageCodes?: string[] }) =>
+      enqueueDcxAdminAiTranslationJobs({
         apiBaseUrl: props.apiBaseUrl,
-        emailKey: props.routeEmailKey ?? "",
-        sourceLanguageCode: props.routeLanguageCode ?? "en",
-        targetLanguageCode: params.targetLanguageCode,
+        entityKind: "newsletter",
+        entityKey: props.routeEmailKey ?? "",
+        sourceLanguageCode: originalTranslationRow?.language.language_code ?? props.routeLanguageCode ?? "en",
+        targetLanguageCodes: params.targetLanguageCodes,
       }),
-    onSuccess: async (payload) => {
+    onSuccess: async () => {
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["dcx_admin_ai_translation_jobs", "newsletter", props.routeEmailKey] }),
         queryClient.invalidateQueries({ queryKey: ["dcx_admin_newsletters_catalog"] }),
         queryClient.invalidateQueries({
           queryKey: ["dcx_admin_newsletter_detail", props.routeLanguageCode, props.routeEmailKey],
@@ -853,10 +880,16 @@ export function DcxAdminNewslettersPage(props: Props) {
           queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
         }),
       ])
-      props.onOpenNewsletter({
-        emailKey: payload.data.email_key,
-        languageCode: payload.data.language_code,
-      })
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["dcx_admin_ai_translation_jobs", "newsletter", props.routeEmailKey] })
+        void queryClient.invalidateQueries({ queryKey: ["dcx_admin_newsletters_catalog"] })
+        void queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_newsletter_detail", props.routeLanguageCode, props.routeEmailKey],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ["dcx_admin_newsletter_sends_catalog", props.routeLanguageCode, props.routeEmailKey],
+        })
+      }, 3500)
     },
   })
   const prepareSendMutation = useMutation({
@@ -1028,7 +1061,7 @@ export function DcxAdminNewslettersPage(props: Props) {
   const draftSnapshot = editorDraft ? buildDraftSnapshot(editorDraft) : ""
   const isDirty = detail !== null && editorDraft !== null && draftSnapshot !== lastSavedSnapshot
   const isAnyWritePending =
-    createDraftMutation.isPending || saveMutation.isPending || createTranslationMutation.isPending
+    createDraftMutation.isPending || saveMutation.isPending || aiTranslationMutation.isPending
   const scheduledSendAtTsMs = readDcxAdminTimestampFromCalendarDateAndTime(
     scheduledSendDate,
     scheduledSendTime,
@@ -1368,8 +1401,27 @@ export function DcxAdminNewslettersPage(props: Props) {
                   >
                     {saveMutation.isPending ? "Saving..." : "Save newsletter"}
                   </Button>
+                  <Button
+                    type="button"
+                    onClick={() => aiTranslationMutation.mutate({})}
+                    disabled={isAnyWritePending || isDirty}
+                    variant="outline"
+                    className="border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300 hover:text-blue-900"
+                  >
+                    {aiTranslationMutation.isPending ? "Queueing..." : "Translate"}
+                  </Button>
                 </ButtonGroup>
               </div>
+              {translationJobsQuery.data?.data.jobs.length ? (
+                <p className="text-right text-xs font-medium text-slate-500">
+                  {readAiTranslationStatusLabel(translationJobsQuery.data.data.jobs)}
+                </p>
+              ) : null}
+              {detail.ai_translation?.is_stale ? (
+                <p className="text-right text-xs font-semibold text-amber-600">
+                  Original changed since this AI translation was generated. Press Translate again.
+                </p>
+              ) : null}
               <div className="w-full max-w-[32rem]">
                 <DcxAdminUnifiedTranslationLanguageSelector
                   existingLanguageRows={detail.translation_summary.existing_translations.map((translation) => ({
@@ -1392,11 +1444,11 @@ export function DcxAdminNewslettersPage(props: Props) {
                   }}
                   missingLanguages={detail.translation_summary.missing_languages}
                   onCreateMissingLanguage={(languageCode) =>
-                    createTranslationMutation.mutate({
-                      targetLanguageCode: languageCode,
+                    aiTranslationMutation.mutate({
+                      targetLanguageCodes: [languageCode],
                     })
                   }
-                  isCreatePending={createTranslationMutation.isPending}
+                  isCreatePending={aiTranslationMutation.isPending}
                 />
               </div>
             </div>
@@ -1503,10 +1555,10 @@ export function DcxAdminNewslettersPage(props: Props) {
               </p>
             ) : null}
 
-            {createTranslationMutation.isError ? (
+            {aiTranslationMutation.isError ? (
               <p className="text-sm text-red-600">
-                {(createTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (createTranslationMutation.error as Error).message}
+                {(aiTranslationMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                  (aiTranslationMutation.error as Error).message}
               </p>
             ) : null}
 

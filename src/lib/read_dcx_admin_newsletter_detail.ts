@@ -6,7 +6,16 @@
  */
 import type { DcxAdminNewsletterCatalogRow } from "./read_dcx_admin_newsletters_catalog"
 
+export type DcxAdminNewsletterAiTranslationProvenance = {
+  is_ai_translated: boolean
+  is_stale: boolean
+  job_id: number | null
+  source_row_id_snapshot: number | null
+  translated_at_ts_ms: number | null
+}
+
 export type DcxAdminNewsletterDetail = DcxAdminNewsletterCatalogRow & {
+  ai_translation: DcxAdminNewsletterAiTranslationProvenance
   translation_summary: {
     original_email_id: number
     original_language_code: string
@@ -19,6 +28,7 @@ export type DcxAdminNewsletterDetail = DcxAdminNewsletterCatalogRow & {
       updated_at_ts_ms: number
       is_current_language: boolean
       language: DcxAdminNewsletterCatalogRow["language"]
+      ai_translation: DcxAdminNewsletterAiTranslationProvenance
     }>
     missing_languages: DcxAdminNewsletterCatalogRow["language"][]
   }
