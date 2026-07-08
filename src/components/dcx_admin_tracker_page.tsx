@@ -166,7 +166,7 @@ function readTrackerStatusPalette(status: DcxAdminTrackerStatus): TrackerBadgePa
   if (status === "active") {
     return { backgroundColor: "#0284c7", borderColor: "#0369a1", color: "#ffffff" }
   }
-  return { backgroundColor: "#475569", borderColor: "#334155", color: "#ffffff" }
+  return { backgroundColor: "#c30047", borderColor: "#9f1239", color: "#ffffff" }
 }
 
 function readTrackerUpdateKindPalette(updateKind: DcxAdminTrackerUpdateKind): TrackerBadgePalette {
