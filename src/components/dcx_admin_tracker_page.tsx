@@ -1051,6 +1051,7 @@ export function DcxAdminTrackerPage(props: Props) {
   const [draft, setDraft] = useState<DcxAdminTrackerDraft>(() => buildBlankTrackerDraft())
   const [isCreating, setIsCreating] = useState(false)
   const [selectedPanelMode, setSelectedPanelMode] = useState<"read" | "edit">("read")
+  const [isCreatingFromGlobalUpdate, setIsCreatingFromGlobalUpdate] = useState(false)
   const [searchValue, setSearchValue] = useState("")
   const [pillarFilter, setPillarFilter] = useState<DcxAdminTrackerPillar | DcxAdminTrackerFilterValue>("all")
   const [statusFilter, setStatusFilter] = useState<DcxAdminTrackerStatus | DcxAdminTrackerFilterValue>("all")
@@ -1083,6 +1084,7 @@ export function DcxAdminTrackerPage(props: Props) {
       setSelectedWorkItemId(result.data.work_item_id)
       setUpdateWorkItemId(result.data.work_item_id)
       setIsCreating(false)
+      setIsCreatingFromGlobalUpdate(false)
       setSelectedPanelMode("read")
     },
   })
@@ -1102,6 +1104,51 @@ export function DcxAdminTrackerPage(props: Props) {
     onSuccess: async () => {
       setUpdateBody("")
       setUpdateKind("note")
+      setIsCreatingFromGlobalUpdate(false)
+      await queryClient.invalidateQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
+    },
+  })
+
+  const createUpdateAndStartLevelMutation = useMutation({
+    mutationFn: async () => {
+      if (updateWorkItemId === null) {
+        throw new Error("Choose a level before creating a level from an update.")
+      }
+
+      const trimmedUpdateBody = updateBody.trim()
+      if (trimmedUpdateBody === "") {
+        throw new Error("Write an update before creating a level from it.")
+      }
+
+      const result = await createDcxAdminTrackerUpdate({
+        apiBaseUrl: props.apiBaseUrl,
+        workItemId: updateWorkItemId,
+        updateKind,
+        updateBody: trimmedUpdateBody,
+      })
+
+      return {
+        updateBody: trimmedUpdateBody,
+        updateId: result.data.update_id,
+        workItemId: result.data.work_item_id,
+      }
+    },
+    onSuccess: async (result) => {
+      const parent = workItems.find((workItem) => workItem.work_item_id === result.workItemId) ?? null
+      const nextDraft = buildBlankTrackerDraft(parent, result.updateId)
+      setUpdateBody("")
+      setUpdateKind("note")
+      setEditingUpdateDraft(null)
+      setIsCreating(true)
+      setIsCreatingFromGlobalUpdate(true)
+      setSelectedWorkItemId(null)
+      setUpdateWorkItemId(parent?.work_item_id ?? result.workItemId)
+      setSelectedPanelMode("edit")
+      setDraft({
+        ...nextDraft,
+        title: readDraftTitleFromComposerText(result.updateBody),
+        description: result.updateBody,
+      })
       await queryClient.invalidateQueries({ queryKey: ["dcx_admin_tracker_catalog"] })
     },
   })
@@ -1140,6 +1187,7 @@ export function DcxAdminTrackerPage(props: Props) {
         setSelectedWorkItemId(null)
         setSelectedPanelMode("read")
         setIsCreating(false)
+        setIsCreatingFromGlobalUpdate(false)
       }
     },
   })
@@ -1325,6 +1373,7 @@ export function DcxAdminTrackerPage(props: Props) {
   useEffect(() => {
     setSelectedWorkItemId(null)
     setIsCreating(false)
+    setIsCreatingFromGlobalUpdate(false)
     setSelectedPanelMode("read")
     setEditingUpdateDraft(null)
   }, [props.routeView])
@@ -1333,6 +1382,7 @@ export function DcxAdminTrackerPage(props: Props) {
     setSelectedWorkItemId(workItem.work_item_id)
     setUpdateWorkItemId(workItem.work_item_id)
     setIsCreating(false)
+    setIsCreatingFromGlobalUpdate(false)
     setSelectedPanelMode("read")
     setEditingUpdateDraft(null)
   }
@@ -1359,6 +1409,7 @@ export function DcxAdminTrackerPage(props: Props) {
 
   function startEditingUpdate(update: DcxAdminTrackerUpdate): void {
     saveUpdateMutation.reset()
+    setIsCreatingFromGlobalUpdate(false)
     setEditingUpdateDraft({
       updateId: update.update_id,
       workItemId: update.work_item_id,
@@ -1369,6 +1420,7 @@ export function DcxAdminTrackerPage(props: Props) {
 
   function startNewWorkItem(parent: DcxAdminTrackerWorkItem | null = null): void {
     setIsCreating(true)
+    setIsCreatingFromGlobalUpdate(false)
     setSelectedWorkItemId(parent?.work_item_id ?? null)
     setUpdateWorkItemId(parent?.work_item_id ?? updateWorkItemId)
     setSelectedPanelMode("edit")
@@ -1376,19 +1428,8 @@ export function DcxAdminTrackerPage(props: Props) {
   }
 
   function startNewWorkItemFromGlobalComposer(): void {
-    const parent = activeWorkItems.find((workItem) => workItem.work_item_id === updateWorkItemId) ?? null
-    const composerText = updateBody.trim()
-    const nextDraft = buildBlankTrackerDraft(parent)
-    setEditingUpdateDraft(null)
-    setIsCreating(true)
-    setSelectedWorkItemId(parent?.work_item_id ?? null)
-    setUpdateWorkItemId(parent?.work_item_id ?? updateWorkItemId)
-    setSelectedPanelMode("edit")
-    setDraft({
-      ...nextDraft,
-      title: composerText ? readDraftTitleFromComposerText(composerText) : nextDraft.title,
-      description: composerText,
-    })
+    createUpdateMutation.reset()
+    createUpdateAndStartLevelMutation.mutate()
   }
 
   function startNewWorkItemFromEditingUpdate(): void {
@@ -1397,11 +1438,18 @@ export function DcxAdminTrackerPage(props: Props) {
     }
 
     const parent = workItems.find((workItem) => workItem.work_item_id === editingUpdateDraft.workItemId) ?? null
+    const updateText = editingUpdateDraft.updateBody.trim()
+    const nextDraft = buildBlankTrackerDraft(parent, editingUpdateDraft.updateId)
     setIsCreating(true)
+    setIsCreatingFromGlobalUpdate(false)
     setSelectedWorkItemId(parent?.work_item_id ?? null)
     setUpdateWorkItemId(parent?.work_item_id ?? updateWorkItemId)
     setSelectedPanelMode("edit")
-    setDraft(buildBlankTrackerDraft(parent, editingUpdateDraft.updateId))
+    setDraft({
+      ...nextDraft,
+      title: updateText ? readDraftTitleFromComposerText(updateText) : nextDraft.title,
+      description: updateText,
+    })
   }
 
   function archiveSelectedWorkItem(isArchived: boolean): void {
@@ -1422,6 +1470,7 @@ export function DcxAdminTrackerPage(props: Props) {
 
   function cancelWorkItemEditor(): void {
     setIsCreating(false)
+    setIsCreatingFromGlobalUpdate(false)
     setSelectedPanelMode("read")
     setDraft(selectedWorkItem ? buildTrackerDraftFromWorkItem(selectedWorkItem) : buildBlankTrackerDraft())
   }
@@ -1430,6 +1479,7 @@ export function DcxAdminTrackerPage(props: Props) {
     setSelectedWorkItemId(null)
     setSelectedPanelMode("read")
     setIsCreating(false)
+    setIsCreatingFromGlobalUpdate(false)
     setEditingUpdateDraft(null)
     setDraft(buildBlankTrackerDraft())
   }
@@ -2054,8 +2104,16 @@ export function DcxAdminTrackerPage(props: Props) {
                 <Button
                   type="button"
                   className="rounded-md"
-                  disabled={createUpdateMutation.isPending || updateWorkItemId === null || updateBody.trim() === ""}
-                  onClick={() => createUpdateMutation.mutate()}
+                  disabled={
+                    createUpdateMutation.isPending ||
+                    createUpdateAndStartLevelMutation.isPending ||
+                    updateWorkItemId === null ||
+                    updateBody.trim() === ""
+                  }
+                  onClick={() => {
+                    createUpdateAndStartLevelMutation.reset()
+                    createUpdateMutation.mutate()
+                  }}
                 >
                   <MessageSquarePlusIcon className="size-4" />
                   {createUpdateMutation.isPending ? "Adding..." : "Add update"}
@@ -2064,17 +2122,31 @@ export function DcxAdminTrackerPage(props: Props) {
                   type="button"
                   variant="outline"
                   className="rounded-md whitespace-nowrap"
+                  disabled={
+                    createUpdateMutation.isPending ||
+                    createUpdateAndStartLevelMutation.isPending ||
+                    updateWorkItemId === null ||
+                    updateBody.trim() === ""
+                  }
                   onClick={startNewWorkItemFromGlobalComposer}
                 >
                   <PlusIcon className="size-4" />
-                  Create level
+                  {createUpdateAndStartLevelMutation.isPending ? "Creating..." : "Create level"}
                 </Button>
               </div>
             </div>
-            {createUpdateMutation.isError ? (
+            {isCreatingFromGlobalUpdate ? (
+              <div className="border-t border-slate-100 px-6 py-5">
+                {renderWorkItemEditorPanel({ inline: true })}
+              </div>
+            ) : null}
+            {createUpdateMutation.isError || createUpdateAndStartLevelMutation.isError ? (
               <p className="px-6 pb-5 text-sm text-red-700">
-                {(createUpdateMutation.error as Error & { suggested_action?: string }).suggested_action ??
-                  (createUpdateMutation.error as Error).message}
+                {createUpdateMutation.isError
+                  ? (createUpdateMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                    (createUpdateMutation.error as Error).message
+                  : (createUpdateAndStartLevelMutation.error as Error & { suggested_action?: string }).suggested_action ??
+                    (createUpdateAndStartLevelMutation.error as Error).message}
               </p>
             ) : null}
           </section>
@@ -2151,7 +2223,9 @@ export function DcxAdminTrackerPage(props: Props) {
                     ) : null}
                   </div>
                   <div className="space-y-3 p-4">
-                    {isCreating && selectedWorkItemId === null ? renderWorkItemEditorPanel({ inline: true }) : null}
+                    {isCreating && selectedWorkItemId === null && !isCreatingFromGlobalUpdate
+                      ? renderWorkItemEditorPanel({ inline: true })
+                      : null}
                     {props.routeView === "all" ? (
                       homeRootItems.length > 0 ? (
                         homeRootItems.map((workItem) => (
@@ -2373,7 +2447,7 @@ export function DcxAdminTrackerPage(props: Props) {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    {isCreating && selectedWorkItemId === null ? (
+                    {isCreating && selectedWorkItemId === null && !isCreatingFromGlobalUpdate ? (
                       <div className="px-4 pt-4">{renderWorkItemEditorPanel({ inline: true })}</div>
                     ) : null}
                     {visibleUpdates.length > 0 ? (

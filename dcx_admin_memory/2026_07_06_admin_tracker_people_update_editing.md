@@ -44,5 +44,6 @@ Added the second tracker polish pass on 2026-07-06:
 - Origin-derived level/task rows under updates show `@Name` when assigned, completing the update -> resulting work -> responsible person loop.
 - Team person headers style the `Last active:` prefix as a small amber label, with the timestamp kept as plain muted text.
 - The tracker home view is titled `Project Map` and now includes task-level rows, so it can be used to review the full plan hierarchy.
+- The top update composer `Create level` action now first saves the update, then opens a visible inline level draft linked to that new update via `origin_update_id`. The update edit drawer `Create level` action also seeds the new level title/description from the update text.
 
 Backend support depends on the matching SQL migrations in `dcx_api/storage/dcx_admin_tracker_people_and_update_editing_2026_07_06.sql` and `dcx_api/storage/dcx_admin_tracker_update_kinds_decision_meeting_2026_07_08.sql`.
