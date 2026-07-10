@@ -15,13 +15,14 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LogOutIcon, ChevronsUpDownIcon } from "lucide-react"
+import { ChevronsUpDownIcon, LayoutDashboardIcon, LogOutIcon } from "lucide-react"
 
 export function AdminNavUser(props: {
   user: {
     name: string
     email: string
   }
+  appHref: string
   onLogout: (() => void) | null
   isLogoutPending: boolean
 }) {
@@ -69,6 +70,12 @@ export function AdminNavUser(props: {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <a href={props.appHref}>
+                <LayoutDashboardIcon />
+                App workspace
+              </a>
+            </DropdownMenuItem>
             <DropdownMenuItem
               disabled={!props.onLogout || props.isLogoutPending}
               onSelect={(event) => {

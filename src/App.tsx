@@ -998,7 +998,7 @@ function App() {
             </h1>
             <p className="max-w-3xl text-sm leading-6 text-slate-600">
               The current user role is `{authenticatedSessionSummary.user_role}`. Admin, dev,
-              shareholder, and investor roles can access the internal admin workspace.
+              and shareholder roles can access the internal admin workspace.
             </p>
             <div className="flex flex-wrap gap-3 pt-3">
               <button

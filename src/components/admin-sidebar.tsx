@@ -7,7 +7,6 @@ import {
   CalendarDaysIcon,
   FilesIcon,
   LanguagesIcon,
-  LayoutDashboardIcon,
   ListTodoIcon,
   SendIcon,
   SquareUserRoundIcon,
@@ -303,21 +302,12 @@ export function AdminSidebar({
         />
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="App workspace">
-              <a href={appHref}>
-                <LayoutDashboardIcon />
-                <span>App workspace</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <AdminNavUser
           user={{
             name: userRole ?? "admin",
             email: userEmail ?? "DCX admin",
           }}
+          appHref={appHref}
           onLogout={onLogout}
           isLogoutPending={isLogoutPending}
         />
