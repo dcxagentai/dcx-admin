@@ -26,6 +26,7 @@ const DCX_ADMIN_LANGUAGE_TO_REGION_CODE: Record<string, string> = {
   fr: "FR",
   hi: "IN",
   id: "ID",
+  ja: "JP",
   pt: "BR",
   ru: "RU",
   tr: "TR",
@@ -62,6 +63,10 @@ const DCX_ADMIN_SUPPORTED_LANGUAGE_ROWS: DcxAdminSupportedLanguageRow[] = [
   {
     language_code: "id",
     language_name_native: "Bahasa Indonesia",
+  },
+  {
+    language_code: "ja",
+    language_name_native: "\u65E5\u672C\u8A9E",
   },
   {
     language_code: "pt",

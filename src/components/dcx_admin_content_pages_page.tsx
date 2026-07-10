@@ -76,6 +76,7 @@ const DCX_ADMIN_CORE_CONTENT_LANGUAGE_CODES = [
   "ur",
   "vi",
   "id",
+  "ja",
   "ar",
   "tr",
   "ru",

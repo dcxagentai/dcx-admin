@@ -26,7 +26,22 @@ import { readDcxAuthenticatedSession } from "./lib/read_dcx_authenticated_sessio
 const DCX_AUTH_LOGOUT_SYNC_STORAGE_KEY = "dcx_auth_logout_at_ts_ms"
 
 function buildDcxAdminLinkedAppAuthPath(pathname: "/login" | "/password/reset/request", languageCode: string): string {
-  const normalizedLanguageCode = ["en", "es", "fr", "de"].includes(languageCode) ? languageCode : "en"
+  const normalizedLanguageCode = [
+    "en",
+    "fr",
+    "de",
+    "es",
+    "pt",
+    "ru",
+    "tr",
+    "ar",
+    "hi",
+    "ur",
+    "id",
+    "zh",
+    "ja",
+    "vi",
+  ].includes(languageCode) ? languageCode : "en"
 
   if (pathname === "/login") {
     return `/${normalizedLanguageCode}/t/login`
